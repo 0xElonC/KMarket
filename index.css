@@ -1,0 +1,167 @@
+/* 投注单元格基础样式 */
+.bet-cell-base {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  background-color: rgba(30, 41, 59, 0.2);
+  backdrop-filter: blur(2px);
+  transition: all 0.2s ease;
+}
+
+.bet-cell-base:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.02);
+}
+
+/* 选中状态 */
+.bet-cell-selected {
+  background-color: rgba(59, 130, 246, 0.05) !important;
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.05);
+  z-index: 40;
+}
+
+/* 盈利状态 */
+.bet-cell-win {
+  background: radial-gradient(circle at center, rgba(234, 179, 8, 0.15), rgba(234, 179, 8, 0.02)) !important;
+  box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.4);
+  z-index: 20;
+}
+
+/* 亏损状态 */
+.bet-cell-fail {
+  border: 1px solid rgba(239, 68, 68, 0.5) !important;
+  background: radial-gradient(circle, rgba(239, 68, 68, 0.1) 0%, transparent 70%);
+  animation: fail-flash 4s forwards linear;
+  z-index: 20;
+}
+
+@keyframes fail-flash {
+  0% { border-color: #EF4444; opacity: 1; }
+  20% { border-color: #EF4444; opacity: 0.8; }
+  100% { border-color: transparent; opacity: 0; }
+}
+
+/* 已过期状态 */
+.bet-cell-dissolved {
+  opacity: 0.3;
+  pointer-events: none;
+  filter: grayscale(100%);
+}
+
+/* 文字悬停发光 */
+.text-glow-hover {
+  transition: all 0.3s ease;
+}
+
+.bet-cell-base:hover .text-glow-hover {
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+  color: #F3F4F6;
+}
+
+/* 金色脉冲动画 */
+.pulse-gold {
+  animation: pulse-gold 3s infinite;
+}
+
+@keyframes pulse-gold {
+  0% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0.4); }
+  70% { box-shadow: 0 0 0 8px rgba(234, 179, 8, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); }
+}
+
+/* HUD浮层样式 */
+.hud-strip {
+  position: absolute;
+  left: 50%;
+  bottom: 110%;
+  transform: translateX(-50%);
+  width: 220px;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  gap: 12px;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 100;
+  animation: hud-slide-up 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.hud-strip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border-width: 4px;
+  border-style: solid;
+  border-color: rgba(30, 41, 59, 0.85) transparent transparent transparent;
+}
+
+@keyframes hud-slide-up {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.95); }
+  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* HUD分隔线 */
+.hud-divider {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(to bottom, transparent, rgba(34, 211, 238, 0.4), transparent);
+  box-shadow: 0 0 4px rgba(34, 211, 238, 0.3);
+}
+
+/* HUD输入框 */
+.hud-input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(34, 211, 238, 0.3);
+  color: #fff;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  width: 50px;
+  padding: 2px 0;
+  outline: none;
+  text-align: right;
+  transition: all 0.3s ease;
+}
+
+.hud-input:focus {
+  border-bottom-color: rgba(34, 211, 238, 0.8);
+  box-shadow: 0 1px 4px rgba(34, 211, 238, 0.3);
+}
+
+.hud-input::-webkit-outer-spin-button,
+.hud-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* HUD按钮 */
+.hud-btn {
+  background: rgba(34, 211, 238, 0.1);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  color: #22d3ee;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.hud-btn:hover {
+  background: rgba(34, 211, 238, 0.2);
+  box-shadow: 0 0 15px rgba(34, 211, 238, 0.2);
+  text-shadow: 0 0 5px rgba(34, 211, 238, 0.6);
+}
