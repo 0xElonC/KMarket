@@ -4,7 +4,8 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KMarket Pro</title>
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans:wght@400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans:wght@400;500;700&family=Share+Tech+Mono&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -12,18 +13,26 @@
         theme: {
           extend: {
             colors: {
-              background: "#1e293b",
+              background: "#121721",
               primary: "#3b82f6",
               secondary: "#94a3b8",
               accent: "#F59E0B",
               success: "#10b981",
               danger: "#ef4444",
-              "neu-base": "#1e293b",
+              "accent-green": "#10b981",
+              "accent-red": "#ef4444",
+              "background-light": "#f6f7f8",
+              "background-dark": "#121721",
+              "text-light": "#cbd5e1",
+              "text-dark": "#e2e8f0",
+              "text-muted": "#94a3b8",
+              "neu-base": "#121721",
             },
             fontFamily: {
               display: ["Manrope", "sans-serif"],
               body: ["Noto Sans", "sans-serif"],
               digital: ["Share Tech Mono", "monospace"],
+              "luxury-mono": ["Space Mono", "monospace"],
             },
           },
         },
@@ -31,19 +40,19 @@
     </script>
     <style>
       body {
-        background-color: #1e293b;
+        background-color: #121721;
         color: #cbd5e1;
       }
       /* Neumorphism Utility Classes */
       .neu-out {
-        background: #1e293b;
+        background: #121721;
         box-shadow: 6px 6px 12px #151d29, -6px -6px 12px #27354d;
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
       .neu-in {
-        background: #1e293b;
-        box-shadow: inset 6px 6px 12px #151d29, inset -6px -6px 12px #27354d;
-        border: 1px solid rgba(255, 255, 255, 0.02);
+        background: #121721;
+        box-shadow: inset 4px 4px 8px #131a25, inset -4px -4px 8px #1c2637;
+        border: 1px solid rgba(255, 255, 255, 0.03);
       }
       .neu-btn {
         background: linear-gradient(145deg, #202c3f, #1b2535);
@@ -58,7 +67,7 @@
       }
       .neu-btn:active, .neu-btn.active {
         transform: translateY(1px);
-        background: #1e293b;
+        background: #121721;
         box-shadow: inset 4px 4px 8px #151d29, inset -4px -4px 8px #27354d;
         color: #3b82f6;
       }
@@ -83,14 +92,23 @@
         height: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #1e293b; 
+        background: #121721;
       }
       ::-webkit-scrollbar-thumb {
-        background: #334155; 
+        background: #334155;
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
+        background: #475569;
+      }
+
+      /* Hide scrollbar for custom-scrollbar class */
+      .custom-scrollbar {
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        display: none; /* Chrome/Safari/Opera */
       }
     </style>
   <script type="importmap">

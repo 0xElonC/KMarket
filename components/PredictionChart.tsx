@@ -1,92 +1,41 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CandleData, BetCell } from '../types';
+import {
+  CANDLES_PER_GRID,
+  DEFAULT_VISIBLE_COLS,
+  EMA_PERIOD,
+  NOW_LINE_RATIO,
+  LOCK_LINE_RATIO,
+  computePriceDomain
+} from '../utils/chartConfig';
+import { PredictionHeader } from './prediction/PredictionHeader';
+import { BettingCellsLayer } from './prediction/BettingCellsLayer';
 
-// 每个网格包含的蜡烛数量
-const CANDLES_PER_GRID = 6;
-// 可见列数（用于计算格子宽度）
-const DEFAULT_VISIBLE_COLS = 9;
-const NOW_LINE_RATIO = 1 / 3;
-const LOCK_LINE_RATIO = 2 / 3;
-// 价格域计算参数（固定高度 + 跟随中心）
-const PRICE_WINDOW = 40;
-const EMA_PERIOD = 10;
-const ATR_PERIOD = 14;
-const ATR_MULTIPLIER = 6;
-const MIN_RANGE_PCT = 0.01;
-const RANGE_PADDING_PCT = 0.1;
 const PAN_SENSITIVITY = 0.7;
 const DEFAULT_BET_AMOUNT = 20;
 
-function computePriceDomain(data: CandleData[]) {
-  if (!data.length) {
-    return { min: 0, max: 100 };
+// 计算EMA数组
+function calculateEMA(data: CandleData[], period: number): number[] {
+  if (data.length === 0) return [];
+
+  const emaValues: number[] = [];
+  const alpha = 2 / (period + 1);
+  let ema = data[0].close;
+  emaValues.push(ema);
+
+  for (let i = 1; i < data.length; i += 1) {
+    ema = alpha * data[i].close + (1 - alpha) * ema;
+    emaValues.push(ema);
   }
 
-  const window = data.slice(-PRICE_WINDOW);
-  const lastClose = window[window.length - 1].close;
-
-  let windowHigh = -Infinity;
-  let windowLow = Infinity;
-  for (const candle of window) {
-    if (candle.high > windowHigh) windowHigh = candle.high;
-    if (candle.low < windowLow) windowLow = candle.low;
-  }
-  const windowRange = Math.max(0, windowHigh - windowLow);
-
-  const emaPeriod = Math.min(EMA_PERIOD, window.length);
-  const alpha = 2 / (emaPeriod + 1);
-  let ema = window[0].close;
-  for (let i = 1; i < window.length; i += 1) {
-    ema = alpha * window[i].close + (1 - alpha) * ema;
-  }
-
-  const atrPeriod = Math.min(ATR_PERIOD, Math.max(1, window.length - 1));
-  let atr = 0;
-  if (atrPeriod > 0) {
-    const startIndex = Math.max(1, window.length - atrPeriod);
-    let sumTR = 0;
-    let count = 0;
-    for (let i = startIndex; i < window.length; i += 1) {
-      const current = window[i];
-      const prev = window[i - 1];
-      const tr = Math.max(
-        current.high - current.low,
-        Math.abs(current.high - prev.close),
-        Math.abs(current.low - prev.close)
-      );
-      sumTR += tr;
-      count += 1;
-    }
-    atr = count ? sumTR / count : 0;
-  }
-
-  const baseRange = Math.max(atr * ATR_MULTIPLIER, lastClose * MIN_RANGE_PCT);
-  const range = Math.max(baseRange, windowRange * (1 + RANGE_PADDING_PCT));
-  const halfRange = range / 2;
-
-  let center = ema;
-  if (windowRange > 0 && range >= windowRange) {
-    const minCenter = windowLow + halfRange;
-    const maxCenter = windowHigh - halfRange;
-    if (minCenter <= maxCenter) {
-      center = Math.min(Math.max(center, minCenter), maxCenter);
-    } else {
-      center = (windowHigh + windowLow) / 2;
-    }
-  }
-
-  const min = center - halfRange;
-  const max = center + halfRange;
-  if (min === max) {
-    return { min: min - 1, max: max + 1 };
-  }
-  return { min, max };
+  return emaValues;
 }
 
 interface PredictionChartProps {
   candleData: CandleData[];
   bettingCells: BetCell[];
   onBet?: (cellId: string, amount: number) => void;
+  onPanChange?: (offset: number) => void;
   gridRows?: number;
   bufferRows?: number;
   visibleCols?: number;
@@ -98,6 +47,7 @@ export function PredictionChart({
   candleData,
   bettingCells,
   onBet,
+  onPanChange,
   gridRows = 5,
   bufferRows = 0,
   visibleCols = DEFAULT_VISIBLE_COLS,
@@ -156,7 +106,8 @@ export function PredictionChart({
 
   useEffect(() => {
     panOffsetRef.current = panOffset;
-  }, [panOffset]);
+    onPanChange?.(panOffset);
+  }, [panOffset, onPanChange]);
 
   // 计算价格范围（固定高度 + 跟随中心）
   const basePriceDomain = useMemo(() => computePriceDomain(candleData), [candleData]);
@@ -179,7 +130,7 @@ export function PredictionChart({
     const handleWheel = (event: WheelEvent) => {
       if (baseRange <= 0 || gridRows <= 0) return;
       event.preventDefault();
-      const priceDelta = (event.deltaY / 100) * rowValue * PAN_SENSITIVITY;
+      const priceDelta = (-event.deltaY / 100) * rowValue * PAN_SENSITIVITY;
       const nextOffset = panOffsetRef.current + priceDelta;
       const clampedOffset = maxPanOffset > 0
         ? Math.max(-maxPanOffset, Math.min(nextOffset, maxPanOffset))
@@ -277,6 +228,35 @@ export function PredictionChart({
         ctx.strokeRect(centerX - candleWidthPx / 2, bodyTop, candleWidthPx, bodyHeight);
       }
     });
+
+    // 绘制EMA线
+    const emaValues = calculateEMA(candleData, EMA_PERIOD);
+    if (emaValues.length > 1) {
+      ctx.beginPath();
+      ctx.strokeStyle = '#3B82F6';
+      ctx.lineWidth = 2;
+
+      let firstPoint = true;
+      candleData.forEach((candle, i) => {
+        const distanceFromNow = candleData.length - 1 - i;
+        const gridIndex = Math.floor(distanceFromNow / CANDLES_PER_GRID);
+        const posInGrid = distanceFromNow % CANDLES_PER_GRID;
+        const centerX = nowLineX - (gridIndex * gridWidthPx) - (posInGrid * candleStepPx) - candleStepPx / 2;
+
+        if (centerX < viewLeft - candleWidthPx || centerX > viewRight + candleWidthPx) return;
+
+        const yEma = getY(emaValues[i]);
+
+        if (firstPoint) {
+          ctx.moveTo(centerX, yEma);
+          firstPoint = false;
+        } else {
+          ctx.lineTo(centerX, yEma);
+        }
+      });
+
+      ctx.stroke();
+    }
   }, [
     candleData,
     gridWidthPx,
@@ -297,7 +277,7 @@ export function PredictionChart({
   return (
     <div className="relative w-full h-full flex flex-col">
       {/* 头部 */}
-      <Header
+      <PredictionHeader
         gridColsLeft={headerLeftCols}
         gridColsRight={headerRightCols}
         totalCols={visibleCols}
@@ -335,7 +315,7 @@ export function PredictionChart({
             />
 
             {/* 预测网格单元格 - z-10 */}
-          <BettingCells
+          <BettingCellsLayer
             cells={bettingCells}
             gridRows={gridRows}
             totalCols={scrollTotalCols}
@@ -345,6 +325,7 @@ export function PredictionChart({
             scrollOffsetPercent={scrollOffsetPercent}
             lockLineX={lockLineX}
             lockLinePercent={lockLinePercent}
+            defaultBetAmount={DEFAULT_BET_AMOUNT}
             onBet={onBet}
           />
           </div>
@@ -402,138 +383,6 @@ export function PredictionChart({
           ))}
         </div>
       </div>
-    </div>
-  );
-}
-
-// 头部组件
-function Header({
-  gridColsLeft,
-  gridColsRight,
-  totalCols,
-  timeIntervals
-}: {
-  gridColsLeft: number;
-  gridColsRight: number;
-  totalCols: number;
-  timeIntervals: string[];
-}) {
-  return (
-    <div className="h-[50px] border-b border-white/5 shrink-0 flex">
-      <div className="flex items-center px-4" style={{ width: `${(gridColsLeft / totalCols) * 100}%` }}>
-        <span className="text-[10px] font-bold text-gray-500 font-mono">PRICE CHART</span>
-      </div>
-      <div className="flex border-l border-white/5" style={{ width: `${(gridColsRight / totalCols) * 100}%` }}>
-        {timeIntervals.map((interval, i) => (
-          <div key={interval} className={`flex-1 flex items-center justify-center text-[10px] font-bold text-gray-500 font-mono ${i > 0 ? 'border-l border-white/5' : ''}`}>
-            {interval}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-
-// 单元格样式
-const cellStyles: Record<string, string> = {
-  default: 'bet-cell-base',
-  selected: 'bet-cell-base bet-cell-selected',
-  win: 'bet-cell-base bet-cell-win pulse-gold',
-  fail: 'bet-cell-base bet-cell-fail',
-  dissolved: 'bet-cell-base bet-cell-dissolved'
-};
-
-const labelColors: Record<string, string> = {
-  default: 'text-gray-600 group-hover:text-gray-400',
-  selected: 'text-blue-400',
-  win: 'text-yellow-500',
-  fail: 'text-red-400 opacity-80',
-  dissolved: 'text-gray-600'
-};
-
-const oddsColors: Record<string, string> = {
-  default: 'text-gray-500 text-glow-hover',
-  selected: 'text-white font-bold drop-shadow-md',
-  win: 'text-white font-bold drop-shadow-md',
-  fail: 'text-red-300',
-  dissolved: 'text-gray-500'
-};
-
-// 投注单元格层
-function BettingCells({
-  cells,
-  gridRows,
-  totalCols,
-  gridWidthPx,
-  rowHeightPx,
-  scrollOffsetPx = 0,
-  scrollOffsetPercent = 0,
-  lockLineX = 0,
-  lockLinePercent = 0,
-  onBet
-}: {
-  cells: BetCell[];
-  gridRows: number;
-  totalCols: number;
-  gridWidthPx?: number;
-  rowHeightPx?: number;
-  scrollOffsetPx?: number;
-  scrollOffsetPercent?: number;
-  lockLineX?: number;
-  lockLinePercent?: number;
-  onBet?: (cellId: string, amount: number) => void;
-}) {
-  const usePx = (gridWidthPx ?? 0) > 0;
-  const gridWidthPercent = 100 / totalCols;
-  const cellHeightPercent = 100 / gridRows;
-
-  return (
-    <div className="absolute inset-0 z-10">
-      {cells.map((cell) => {
-        // 单元格位置：从左边缘开始（覆盖整个区域）
-        const left = usePx
-          ? cell.col * (gridWidthPx ?? 0)
-          : cell.col * gridWidthPercent;
-        const top = usePx && (rowHeightPx ?? 0) > 0
-          ? cell.row * (rowHeightPx ?? 0)
-          : cell.row * cellHeightPercent;
-        const cellLeftInView = usePx
-          ? (left as number) - scrollOffsetPx
-          : (left as number) - scrollOffsetPercent;
-        const isLocked = usePx ? cellLeftInView <= lockLineX : cellLeftInView <= lockLinePercent;
-        const effectiveStatus = cell.status;
-        const shouldHideInfo = isLocked && cell.status === 'default';
-
-        return (
-          <div
-            key={cell.id}
-            className={`${cellStyles[effectiveStatus]} group cursor-pointer absolute`}
-            style={{
-              left: usePx ? left : `${left}%`,
-              top: usePx && (rowHeightPx ?? 0) > 0 ? top : `${top}%`,
-              width: usePx ? (gridWidthPx ?? 0) : `${gridWidthPercent}%`,
-              height: usePx && (rowHeightPx ?? 0) > 0 ? (rowHeightPx ?? 0) : `${cellHeightPercent}%`
-            }}
-            onDoubleClick={() => {
-              if (cell.status === 'dissolved' || isLocked) return;
-              onBet?.(cell.id, DEFAULT_BET_AMOUNT);
-            }}
-          >
-            {cell.status === 'win' && (
-              <div className="absolute -top-2 -right-2 bg-yellow-500 text-black text-[8px] font-extrabold px-1 rounded-full shadow-lg z-30 animate-bounce">+USDC</div>
-            )}
-            {!shouldHideInfo && (
-              <>
-                <span className={`text-[9px] font-bold uppercase ${labelColors[effectiveStatus]}`}>
-                  {cell.status === 'selected' ? 'Active' : cell.status === 'win' ? 'WIN' : cell.status === 'fail' ? 'Missed' : cell.label}
-                </span>
-                <span className={`text-[10px] font-mono mt-1 ${oddsColors[effectiveStatus]}`}>{cell.odds.toFixed(1)}x</span>
-              </>
-            )}
-          </div>
-        );
-      })}
     </div>
   );
 }

@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Page } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AssetCard } from '../components/AssetCard';
-import { NeuButton } from '../components/NeuButton';
 
 // Expanded mock data with categories
 const initialAssets = [
@@ -16,10 +15,17 @@ const initialAssets = [
   { id: '8', symbol: 'MANA', name: 'Decentraland', price: 0.65, change: -5.40, color: '#ef4444', category: 'Metaverse', data: [50,45,40,35,30,28,25,20,15,18,16] },
 ];
 
-export default function Markets({ onNavigate }: { onNavigate: (page: Page) => void }) {
+export default function Markets({
+  onNavigate,
+  onSelectAsset
+}: {
+  onNavigate: (page: Page) => void;
+  onSelectAsset: (asset: { symbol: string; name: string; price: number; change: number }) => void;
+}) {
   const { t } = useLanguage();
   const [activeFilter, setActiveFilter] = useState('All');
   const [favorites, setFavorites] = useState<string[]>(['1']); // BTC favorited by default
+  const [searchTerm, setSearchTerm] = useState('');
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -45,8 +51,16 @@ export default function Markets({ onNavigate }: { onNavigate: (page: Page) => vo
        data = data.filter(asset => asset.category === targetCategory);
     }
     
+    if (searchTerm.trim()) {
+      const query = searchTerm.trim().toLowerCase();
+      data = data.filter(asset =>
+        asset.symbol.toLowerCase().includes(query) ||
+        asset.name.toLowerCase().includes(query)
+      );
+    }
+
     return data;
-  }, [activeFilter, favorites, t]);
+  }, [activeFilter, favorites, searchTerm, t]);
 
   return (
     <div className="flex flex-col gap-8 max-w-[1600px] mx-auto w-full">
@@ -79,6 +93,18 @@ export default function Markets({ onNavigate }: { onNavigate: (page: Page) => vo
                     onClick={() => setActiveFilter(t.markets.meta)}
                 />
             </div>
+            <div className="relative w-full md:w-80">
+                <div className="search-inset h-12 rounded-xl flex items-center px-4 gap-2 w-full">
+                    <span className="material-symbols-outlined text-slate-600 text-[20px]">search</span>
+                    <input
+                        className="search-input bg-transparent border-none focus:ring-0 text-sm font-medium text-slate-300 w-full placeholder-slate-600 font-luxury-mono"
+                        placeholder={t.markets.search}
+                        type="text"
+                        value={searchTerm}
+                        onChange={(event) => setSearchTerm(event.target.value)}
+                    />
+                </div>
+            </div>
         </div>
 
         {/* Grid */}
@@ -89,6 +115,7 @@ export default function Markets({ onNavigate }: { onNavigate: (page: Page) => vo
                         key={asset.id} 
                         asset={asset} 
                         onNavigate={onNavigate} 
+                        onSelectAsset={onSelectAsset}
                         isFavorite={favorites.includes(asset.id)}
                         onToggleFavorite={(e: React.MouseEvent) => toggleFavorite(asset.id, e)}
                     />
@@ -104,11 +131,11 @@ export default function Markets({ onNavigate }: { onNavigate: (page: Page) => vo
 }
 
 const FilterButton = ({ label, active, onClick }: { label: string, active?: boolean, onClick: () => void }) => (
-    <NeuButton 
+    <button
+        type="button"
         onClick={onClick}
-        active={active}
-        className={`px-6 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 ${active ? 'text-primary scale-95' : 'text-gray-500 hover:text-gray-300'}`}
+        className={`premium-radio w-auto px-6 rounded-xl uppercase tracking-wider text-[10px] font-bold whitespace-nowrap transition-colors ${active ? 'active text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
     >
         {label}
-    </NeuButton>
+    </button>
 );

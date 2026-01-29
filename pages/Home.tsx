@@ -9,7 +9,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: Page) => void 
   const { t } = useLanguage();
 
   return (
-    <div className="flex flex-col gap-12 max-w-6xl mx-auto pb-12">
+    <div className="flex flex-col gap-12 max-w-6xl mx-auto pb-12 home-halo">
       {/* Hero Section */}
       <section className="w-full flex flex-col items-center text-center relative z-10 mt-8">
         <div className="neu-out p-8 md:p-16 w-full flex flex-col items-center gap-8 relative overflow-hidden rounded-3xl">
@@ -34,7 +34,7 @@ export default function Home({ onNavigate }: { onNavigate: (page: Page) => void 
             <div className="flex flex-col sm:flex-row items-center gap-6 mt-4">
                 <NeuButton 
                   onClick={() => onNavigate(Page.MARKETS)}
-                  className="px-10 py-5 rounded-2xl text-lg font-bold text-primary flex items-center gap-3 hover:scale-105 transition-transform"
+                  className="px-10 py-5 rounded-2xl text-lg font-bold text-primary flex items-center gap-3 hover:scale-105 transition-transform home-cta"
                 >
                     {t.home.start}
                     <ArrowRight size={20} />
