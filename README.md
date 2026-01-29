@@ -1,20 +1,44 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# KMarket Pro (Frontend)
 
-# Run and deploy your AI Studio app
+KMarket is a front-end demo for a prediction trading UI. It includes Home, Markets,
+Terminal, and Dashboard pages with mock data and limited live data for ETH.
 
-This contains everything you need to run your app locally.
+## Tech Stack
+- Vite + React + TypeScript
+- Tailwind (via CDN in `index.html`)
+- Recharts (sparklines/visuals)
 
-View your app in AI Studio: https://ai.studio/apps/drive/1a45mrw-NR2AFXi0mhCaobzudbVvonN3M
+## Quick Start
+**Prerequisites:** Node.js 18+
 
-## Run Locally
+```bash
+npm install
+npm run dev
+```
 
-**Prerequisites:**  Node.js
+Open the local dev server URL printed in the terminal (usually `http://localhost:5173`).
 
+### Build / Preview
+```bash
+npm run build
+npm run preview
+```
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Data Behavior
+- **ETH**: uses live 1m candles from Binance WebSocket when ETH is selected and
+  network access is available.
+- **Other symbols**: use mock candle generation.
+- If live data is blocked/unavailable, ETH automatically falls back to mock data.
+
+## Project Structure
+- `pages/` — page-level views (Home / Markets / Terminal / Dashboard)
+- `components/` — shared UI components
+- `components/terminal/` — Terminal-only UI
+- `components/prediction/` — prediction grid subcomponents
+- `hooks/` — data + grid logic (mock data, Binance stream, resolution)
+- `data/` — demo datasets
+- `translations.ts` — CN/EN copy
+- `index.css` / `index.html` — global styling + Tailwind config
+
+## Notes
+- `.env.local` exists but is not required for the current frontend demo.
