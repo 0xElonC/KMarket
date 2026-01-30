@@ -26,11 +26,10 @@ dist-ssr
 # Local-only docs / workflows / assets
 .playwright-mcp/
 .spec-workflow/
-TODO.md
-维护修改建议 1.md
 DEMO_IMPLEMENTATION_PLAN.md
 PROJECT_PLAN.md
 PROJECT_STRUCTURE.md
 stitch_neo_minimalist_gallery_dashboard/
 stitch_neo_minimalist_gallery_dashboard.zip
+local-docs/
 nul
