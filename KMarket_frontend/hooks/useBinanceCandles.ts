@@ -53,13 +53,15 @@ export function useBinanceCandles({
       interval,
       limit: String(limit)
     });
-    return `https://api.binance.com/api/v3/klines?${params.toString()}`;
+    // Use binance.vision API which is accessible globally
+    return `https://data-api.binance.vision/api/v3/klines?${params.toString()}`;
   }, [symbol, interval, limit]);
 
   const intervalMs = useMemo(() => intervalToMs(interval), [interval]);
   const streamUrl = useMemo(() => {
     const stream = `${symbol.toLowerCase()}@kline_${interval}`;
-    return `wss://stream.binance.com:9443/ws/${stream}`;
+    // Use binance.vision WebSocket which is accessible globally
+    return `wss://data-stream.binance.vision/ws/${stream}`;
   }, [symbol, interval]);
 
   useEffect(() => {

@@ -8,16 +8,18 @@ interface UseBettingGridOptions {
   initialCols: number;
   gridRowStart: number;
   gridTotalRows: number;
+  visibleRows: number;
 }
 
 export function useBettingGrid({
   updateCount,
   initialCols,
   gridRowStart,
-  gridTotalRows
+  gridTotalRows,
+  visibleRows
 }: UseBettingGridOptions) {
   const [bettingCells, setBettingCells] = useState<BetCell[]>(() =>
-    generateBettingCells(initialCols, gridRowStart, gridTotalRows)
+    generateBettingCells(initialCols, gridRowStart, gridTotalRows, visibleRows)
   );
   const [gridColsTotal, setGridColsTotal] = useState(initialCols);
 
@@ -30,12 +32,12 @@ export function useBettingGrid({
     if (neededCols > gridColsTotal) {
       const newCells: BetCell[] = [];
       for (let col = gridColsTotal; col < neededCols; col += 1) {
-        newCells.push(...generateNewColumn(col, gridRowStart, gridTotalRows));
+        newCells.push(...generateNewColumn(col, gridRowStart, gridTotalRows, visibleRows));
       }
       setBettingCells(prev => [...prev, ...newCells]);
       setGridColsTotal(neededCols);
     }
-  }, [updateCount, gridColsTotal, gridRowStart, gridTotalRows, initialCols]);
+  }, [updateCount, gridColsTotal, gridRowStart, gridTotalRows, initialCols, visibleRows]);
 
   return { bettingCells, setBettingCells };
 }

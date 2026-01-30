@@ -222,10 +222,9 @@ export function PredictionChart({
       ctx.stroke();
 
       if (isUp) {
-        ctx.strokeRect(centerX - candleWidthPx / 2, bodyTop, candleWidthPx, bodyHeight);
+        ctx.fillRect(centerX - candleWidthPx / 2, bodyTop, candleWidthPx, bodyHeight);
       } else {
         ctx.fillRect(centerX - candleWidthPx / 2, bodyTop, candleWidthPx, bodyHeight);
-        ctx.strokeRect(centerX - candleWidthPx / 2, bodyTop, candleWidthPx, bodyHeight);
       }
     });
 

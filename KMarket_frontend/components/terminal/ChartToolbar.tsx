@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, Maximize2 } from 'lucide-react';
+import { Settings, Maximize2, Play, Pause } from 'lucide-react';
 import { NeuButton } from '../NeuButton';
 
 interface ChartToolbarProps {
@@ -17,6 +17,8 @@ interface ChartToolbarProps {
   labels: {
     betAmount: string;
   };
+  isDemoMode?: boolean;
+  onDemoModeChange?: (isDemoMode: boolean) => void;
 }
 
 export function ChartToolbar({
@@ -27,7 +29,9 @@ export function ChartToolbar({
   onBetAmountChange,
   activeTimeframe,
   onTimeframeChange,
-  labels
+  labels,
+  isDemoMode = false,
+  onDemoModeChange
 }: ChartToolbarProps) {
   const quoteLabel = isForex ? 'USD' : 'USDT';
 
@@ -94,6 +98,21 @@ export function ChartToolbar({
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Demo Mode Toggle */}
+        {onDemoModeChange && (
+          <button
+            onClick={() => onDemoModeChange(!isDemoMode)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              isDemoMode
+                ? 'bg-white/5 text-gray-400 border border-white/10 hover:text-gray-300'
+                : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+            }`}
+            title={isDemoMode ? 'Switch to Live Data' : 'Switch to Demo Mode'}
+          >
+            {isDemoMode ? <Pause size={14} /> : <Play size={14} />}
+            <span>{isDemoMode ? 'DEMO' : 'LIVE'}</span>
+          </button>
+        )}
         <div className="hidden md:flex bg-[#161f2d] rounded-lg p-1">
           {['1H', '4H', '1D'].map(tf => (
             <button

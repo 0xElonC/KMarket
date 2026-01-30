@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { PredictionChart } from '../components/PredictionChart';
-import { BetCell } from '../types';
+import { BetCell, BetType } from '../types';
 import { CANDLES_PER_GRID, NOW_LINE_RATIO } from '../utils/chartConfig';
 import { HistoryPanel } from '../components/terminal/HistoryPanel';
 import { ChartToolbar } from '../components/terminal/ChartToolbar';
@@ -16,8 +16,8 @@ import {
 } from '../data/terminal';
 
 
-const GRID_ROWS = 5;
-const GRID_BUFFER_ROWS = 10;
+const GRID_ROWS = 6;
+const GRID_BUFFER_ROWS = 12;
 const GRID_ROW_START = -GRID_BUFFER_ROWS;
 const GRID_TOTAL_ROWS = GRID_ROWS + GRID_BUFFER_ROWS * 2;
 const VISIBLE_COLS = 9;
@@ -66,24 +66,26 @@ export default function Terminal({
   const [mockUpdateCount, setMockUpdateCount] = useState(0); // K线更新计数，驱动网格滚动
   const [betAmount, setBetAmount] = useState(50);
   const [panOffset, setPanOffset] = useState(0);
+  const [isDemoMode, setIsDemoMode] = useState(true); // 演示模式开关，默认开启
   const isEthSymbol = activeSymbol.symbol === 'ETH';
   const { chartData: liveChartData, updateCount: liveUpdateCount } = useBinanceCandles({
     symbol: 'ETHUSDT',
     interval: '1m',
-    enabled: isEthSymbol
+    enabled: isEthSymbol && !isDemoMode
   });
   const { chartData: mockChartData } = useMockCandles({
     basePrice: activeSymbol.price,
-    enabled: !isEthSymbol || liveChartData.length === 0
+    enabled: !isEthSymbol || liveChartData.length === 0 || isDemoMode
   });
-  const isLiveReady = isEthSymbol && liveChartData.length > 0;
+  const isLiveReady = isEthSymbol && liveChartData.length > 0 && !isDemoMode;
   const chartData = isLiveReady ? liveChartData : mockChartData;
   const updateCount = isLiveReady ? liveUpdateCount : mockUpdateCount;
   const { bettingCells, setBettingCells } = useBettingGrid({
     updateCount,
     initialCols: INITIAL_GRID_COLS,
     gridRowStart: GRID_ROW_START,
-    gridTotalRows: GRID_TOTAL_ROWS
+    gridTotalRows: GRID_TOTAL_ROWS,
+    visibleRows: GRID_ROWS
   });
   // 记录活跃的下注，用于自动判定
   const [activeBets, setActiveBets] = useState<Array<{
@@ -92,6 +94,7 @@ export default function Terminal({
     col: number;
     betUpdateCount: number;
     targetUpdateCount: number;
+    betType: BetType;
   }>>([]);
 
   // Effect: 动态更新K线 - 每2秒生成新K线，模拟实时走势
@@ -103,7 +106,7 @@ export default function Terminal({
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [activeSymbol, isLiveReady]);
+  }, [activeSymbol, isLiveReady, isDemoMode]);
 
   // Effect: 自动新增预测网格列逻辑已抽离到 useBettingGrid
 
@@ -137,6 +140,11 @@ export default function Terminal({
     const row = Number(match[1]);
     const col = Number(match[2]);
 
+    // 找到对应的格子获取 betType
+    const cell = bettingCells.find(c => c.id === cellId);
+    if (!cell) return;
+    const betType = cell.betType;
+
     // 计算到达NOW线需要的updateCount
     // NOW线在1/3处，且网格会随updateCount向左移动
     const nowLineCol = VISIBLE_COLS * NOW_LINE_RATIO;
@@ -149,6 +157,7 @@ export default function Terminal({
       cellId,
       row,
       col,
+      betType,
       当前updateCount: updateCount,
       目标updateCount: targetUpdateCount,
       需要等待: updateCountsToWait,
@@ -161,14 +170,15 @@ export default function Terminal({
       row,
       col,
       betUpdateCount: updateCount,
-      targetUpdateCount
+      targetUpdateCount,
+      betType
     }]);
 
     // 更新格子状态为selected
-    setBettingCells(prev => prev.map(cell => {
-      if (cell.id !== cellId) return cell;
-      if (cell.status !== 'default') return cell;
-      return { ...cell, status: 'selected' };
+    setBettingCells(prev => prev.map(c => {
+      if (c.id !== cellId) return c;
+      if (c.status !== 'default') return c;
+      return { ...c, status: 'selected' };
     }));
   };
 
@@ -201,6 +211,8 @@ export default function Terminal({
               activeTimeframe={activeTimeframe}
               onTimeframeChange={setActiveTimeframe}
               labels={{ betAmount: t.terminal.betAmount }}
+              isDemoMode={isDemoMode}
+              onDemoModeChange={setIsDemoMode}
             />
             
             {/* Chart Area with Betting Grid - 统一网格系统 */}

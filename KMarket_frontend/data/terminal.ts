@@ -1,12 +1,12 @@
 import { BetCell } from '../types';
 
 export const cryptoAssets = [
-  { symbol: 'BTC', name: 'Bitcoin', price: 42100, change: '+1.2%' },
-  { symbol: 'ETH', name: 'Ethereum', price: 2300, change: '-0.8%' },
-  { symbol: 'SOL', name: 'Solana', price: 95, change: '+4.5%' },
-  { symbol: 'XRP', name: 'Ripple', price: 0.55, change: '+0.2%' },
+  { symbol: 'BTC', name: 'Bitcoin', price: 102000, change: '+1.2%' },
+  { symbol: 'ETH', name: 'Ethereum', price: 2728, change: '-0.8%' },
+  { symbol: 'SOL', name: 'Solana', price: 240, change: '+4.5%' },
+  { symbol: 'XRP', name: 'Ripple', price: 3.10, change: '+0.2%' },
   { symbol: 'AVAX', name: 'Avalanche', price: 35, change: '-1.5%' },
-  { symbol: 'MATIC', name: 'Polygon', price: 0.85, change: '+0.5%' }
+  { symbol: 'MATIC', name: 'Polygon', price: 0.45, change: '+0.5%' }
 ];
 
 export const forexAssets = [
@@ -118,22 +118,27 @@ export const historyItems = [
   }
 ];
 
-// Mock投注网格数据 - 供同伴对接
-export const generateBettingCells = (colCount: number = 3, rowStart: number = 0, rowCount: number = 5): BetCell[] => {
-  const labels = ['High', 'Mid-High', 'Mid', 'Mid-Low', 'Low'];
+// Mock投注网格数据 - 6行格子（3个High买升 + 3个Low买跌）
+// visibleRows 是可见行数（默认6），用于判断 High/Low
+export const generateBettingCells = (colCount: number = 3, rowStart: number = 0, rowCount: number = 6, visibleRows: number = 6): BetCell[] => {
   const cells: BetCell[] = [];
+  const halfVisible = Math.floor(visibleRows / 2);
 
   for (let row = rowStart; row < rowStart + rowCount; row++) {
     for (let col = 0; col < colCount; col++) {
       const id = `${row}-${col}`;
-      const labelIndex = ((row % labels.length) + labels.length) % labels.length;
+      // 基于可见行数判断：上半部分是 High，下半部分是 Low
+      // row 越小价格越高，所以小的 row 是 High
+      const relativeRow = ((row % visibleRows) + visibleRows) % visibleRows;
+      const isHigh = relativeRow < halfVisible;
       cells.push({
         id,
         row,
         col,
-        label: labels[labelIndex],
-        odds: 1.5 + Math.random() * 5,
-        status: 'default'
+        label: isHigh ? 'High' : 'Low',
+        odds: 1.5 + Math.random() * 3,
+        status: 'default',
+        betType: isHigh ? 'high' : 'low'
       });
     }
   }
@@ -141,19 +146,22 @@ export const generateBettingCells = (colCount: number = 3, rowStart: number = 0,
 };
 
 // 生成新的一列预测网格
-export const generateNewColumn = (colIndex: number, rowStart: number = 0, rowCount: number = 5): BetCell[] => {
-  const labels = ['High', 'Mid-High', 'Mid', 'Mid-Low', 'Low'];
+export const generateNewColumn = (colIndex: number, rowStart: number = 0, rowCount: number = 6, visibleRows: number = 6): BetCell[] => {
   const cells: BetCell[] = [];
+  const halfVisible = Math.floor(visibleRows / 2);
 
   for (let row = rowStart; row < rowStart + rowCount; row++) {
-    const labelIndex = ((row % labels.length) + labels.length) % labels.length;
+    // 基于可见行数判断：上半部分是 High，下半部分是 Low
+    const relativeRow = ((row % visibleRows) + visibleRows) % visibleRows;
+    const isHigh = relativeRow < halfVisible;
     cells.push({
       id: `${row}-${colIndex}`,
       row,
       col: colIndex,
-      label: labels[labelIndex],
-      odds: 1.5 + Math.random() * 5,
-      status: 'default'
+      label: isHigh ? 'High' : 'Low',
+      odds: 1.5 + Math.random() * 3,
+      status: 'default',
+      betType: isHigh ? 'high' : 'low'
     });
   }
   return cells;

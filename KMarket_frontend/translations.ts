@@ -17,7 +17,9 @@ export const translations = {
       wealthDashboard: '财富看板',
       search: '搜索市场...',
       walletBalance: '钱包余额',
-      connectWallet: '连接钱包'
+      connectWallet: '连接钱包',
+      wrongNetwork: '切换到 Polygon',
+      disconnect: '断开连接'
     },
     home: {
       live: '主网已上线',
@@ -130,7 +132,9 @@ export const translations = {
       wealthDashboard: 'Wealth Dashboard',
       search: 'Search markets...',
       walletBalance: 'Wallet Balance',
-      connectWallet: 'Connect Wallet'
+      connectWallet: 'Connect Wallet',
+      wrongNetwork: 'Switch to Polygon',
+      disconnect: 'Disconnect'
     },
     home: {
       live: 'Live on Mainnet',

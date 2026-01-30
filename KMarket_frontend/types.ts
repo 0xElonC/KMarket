@@ -41,14 +41,18 @@ export interface CandleData {
 // 投注单元格状态
 export type BetCellStatus = 'default' | 'selected' | 'win' | 'fail' | 'dissolved';
 
+// 投注类型：买升或买跌
+export type BetType = 'high' | 'low';
+
 // 投注单元格数据
 export interface BetCell {
   id: string;
-  row: number;        // 价格区间行 (0=High, 4=Low)
-  col: number;        // 时间列 (0=+10m, 1=+30m, 2=+1h)
-  label: string;      // 显示标签 (High/Mid-High/Mid/Mid-Low/Low)
+  row: number;        // 价格区间行
+  col: number;        // 时间列
+  label: string;      // 显示标签 (High/Low)
   odds: number;       // 赔率
   status: BetCellStatus;
+  betType: BetType;   // 买升或买跌
 }
 
 // 投注网格配置

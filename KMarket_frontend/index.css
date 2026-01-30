@@ -17,32 +17,74 @@
   box-shadow: inset 0 0 15px rgba(255, 255, 255, 0.02);
 }
 
-/* 选中状态 */
-.bet-cell-selected {
-  background-color: rgba(59, 130, 246, 0.05) !important;
-  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3), 0 0 20px rgba(59, 130, 246, 0.05);
+/* 选中状态 - High 绿色铺满 */
+.bet-cell-selected-high {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.4), rgba(16, 185, 129, 0.2)) !important;
+  box-shadow: inset 0 0 0 2px rgba(16, 185, 129, 0.6), 0 0 30px rgba(16, 185, 129, 0.2);
   z-index: 40;
+  animation: bet-placed 0.5s ease-out;
 }
 
-/* 盈利状态 */
-.bet-cell-win {
-  background: radial-gradient(circle at center, rgba(234, 179, 8, 0.15), rgba(234, 179, 8, 0.02)) !important;
-  box-shadow: inset 0 0 0 1px rgba(234, 179, 8, 0.4);
-  z-index: 20;
+.bet-cell-selected-high-deep {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.6), rgba(16, 185, 129, 0.35)) !important;
+  box-shadow: inset 0 0 0 2px rgba(16, 185, 129, 0.75), 0 0 40px rgba(16, 185, 129, 0.35);
+  z-index: 40;
+  animation: bet-placed 0.5s ease-out;
 }
 
-/* 亏损状态 */
-.bet-cell-fail {
-  border: 1px solid rgba(239, 68, 68, 0.5) !important;
-  background: radial-gradient(circle, rgba(239, 68, 68, 0.1) 0%, transparent 70%);
-  animation: fail-flash 4s forwards linear;
-  z-index: 20;
+/* 选中状态 - Low 红色铺满 */
+.bet-cell-selected-low {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(239, 68, 68, 0.2)) !important;
+  box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.6), 0 0 30px rgba(239, 68, 68, 0.2);
+  z-index: 40;
+  animation: bet-placed 0.5s ease-out;
 }
 
-@keyframes fail-flash {
-  0% { border-color: #EF4444; opacity: 1; }
-  20% { border-color: #EF4444; opacity: 0.8; }
-  100% { border-color: transparent; opacity: 0; }
+.bet-cell-selected-low-deep {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.6), rgba(239, 68, 68, 0.35)) !important;
+  box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.75), 0 0 40px rgba(239, 68, 68, 0.35);
+  z-index: 40;
+  animation: bet-placed 0.5s ease-out;
+}
+
+@keyframes bet-placed {
+  0% { transform: scale(0.8); opacity: 0; }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* 盈利状态 - 白色闪光后消失 */
+.bet-cell-win-flash {
+  background: rgba(255, 255, 255, 0.8) !important;
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.6);
+  z-index: 50;
+  animation: win-flash-fade 0.5s ease-out forwards;
+}
+
+@keyframes win-flash-fade {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+
+/* 盈利数字上浮动画 - 现在由 JS 控制 */
+.profit-float {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 18px;
+  font-weight: 800;
+  color: #10B981;
+  text-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 0 0 40px rgba(16, 185, 129, 0.4);
+  z-index: 100;
+  pointer-events: none;
+}
+
+/* 亏损状态 - 物理掉落由 JS 控制 */
+.bet-cell-fail-physics {
+  /* 占位，实际由 JS 渲染掉落效果 */
+  opacity: 0;
 }
 
 /* 已过期状态 */
@@ -636,4 +678,46 @@ input[type="number"] {
   background: #121721;
   box-shadow: inset 4px 4px 8px #0a0d13, inset -4px -4px 8px #1a212f;
   color: #3b82f6;
+}
+
+/* RainbowKit style overrides to match neumorphic design */
+[data-rk] {
+  --rk-colors-modalBackground: #121721 !important;
+  --rk-colors-modalBorder: rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-rk] [role="dialog"] {
+  background: #121721 !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  box-shadow: 10px 10px 20px #0a0d12, -10px -10px 20px #1a2230 !important;
+}
+
+[data-rk] button[data-testid="rk-wallet-option"] {
+  background: linear-gradient(145deg, #202c3f, #1b2535) !important;
+  box-shadow: 5px 5px 10px #151d29, -5px -5px 10px #27354d !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] button[data-testid="rk-wallet-option"]:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 7px 7px 14px #121a25, -7px -7px 14px #2a3851 !important;
+}
+
+[data-rk] button[data-testid="rk-wallet-option"]:active {
+  transform: translateY(1px) !important;
+  background: #121721 !important;
+  box-shadow: inset 4px 4px 8px #151d29, inset -4px -4px 8px #27354d !important;
+}
+
+/* RainbowKit modal close button */
+[data-rk] button[aria-label="Close"] {
+  background: linear-gradient(145deg, #202c3f, #1b2535) !important;
+  box-shadow: 3px 3px 6px #151d29, -3px -3px 6px #27354d !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+[data-rk] button[aria-label="Close"]:hover {
+  background: #121721 !important;
+  box-shadow: inset 2px 2px 4px #151d29, inset -2px -2px 4px #27354d !important;
 }
