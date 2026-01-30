@@ -26,9 +26,6 @@ dist-ssr
 # Local-only docs / workflows / assets
 .playwright-mcp/
 .spec-workflow/
-DEMO_IMPLEMENTATION_PLAN.md
-PROJECT_PLAN.md
-PROJECT_STRUCTURE.md
 stitch_neo_minimalist_gallery_dashboard/
 stitch_neo_minimalist_gallery_dashboard.zip
 local-docs/
