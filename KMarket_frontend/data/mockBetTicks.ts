@@ -1,81 +1,78 @@
-// 后端数据类型定义
-export interface BackendTick {
-  tickId: string;
-  odds: string;
-  status: string;  // "pending" | "settled"
-  expiryTime: number;
-  basisPrice: string;
-  priceRange: {
-    min: number | null;
-    max: number | null;
-    label: string;
-    percentMin: number;
-    percentMax: number;
-  };
-}
+import { BackendTick, MockBetResponse } from '../types/betting';
 
-export interface BackendResponse {
-  success: boolean;
-  data: {
-    symbol: string;
-    currentPrice: string;
-    currentTime: number;
-    intervalSec: number;
-    update: boolean;  // true = 新增1列
-    col1: BackendTick[] | null;  // 最接近结算的列（可能为空）
-    col2: BackendTick[] | null;
-    col3: BackendTick[] | null;
-    col4: BackendTick[] | null;  // 最新生成的列
-  };
-}
+// 价格区间：2887.5 到 2612.5，平均分 6 格
+const PRICE_HIGH = 2887.5;
+const PRICE_LOW = 2612.5;
+const PRICE_STEP = (PRICE_HIGH - PRICE_LOW) / 6; // 45.8333...
 
 const PRICE_RANGES = [
-  { percentMin: 2, percentMax: 100, label: '+2%↑' },
-  { percentMin: 1, percentMax: 2, label: '+1%~+2%' },
-  { percentMin: 0, percentMax: 1, label: '0~+1%' },
-  { percentMin: -1, percentMax: 0, label: '-1%~0' },
-  { percentMin: -2, percentMax: -1, label: '-2%~-1%' },
-  { percentMin: -100, percentMax: -2, label: '-2%↓' },
+  { min: PRICE_HIGH - PRICE_STEP * 0, max: PRICE_HIGH - PRICE_STEP * 1, label: '2887.5~2841.7' },
+  { min: PRICE_HIGH - PRICE_STEP * 1, max: PRICE_HIGH - PRICE_STEP * 2, label: '2841.7~2795.8' },
+  { min: PRICE_HIGH - PRICE_STEP * 2, max: PRICE_HIGH - PRICE_STEP * 3, label: '2795.8~2750.0' },
+  { min: PRICE_HIGH - PRICE_STEP * 3, max: PRICE_HIGH - PRICE_STEP * 4, label: '2750.0~2704.2' },
+  { min: PRICE_HIGH - PRICE_STEP * 4, max: PRICE_HIGH - PRICE_STEP * 5, label: '2704.2~2658.3' },
+  { min: PRICE_HIGH - PRICE_STEP * 5, max: PRICE_HIGH - PRICE_STEP * 6, label: '2658.3~2612.5' },
 ];
 
-// Mock 状态管理 - 滑动窗口，从空开始逐渐填充
+// Mock 状态管理 - 滑动窗口
 let mockState = {
   lastUpdateTime: 0,
   nextColumnIndex: 0,
-  // 当前窗口的列数据（最多4列，从0列开始逐渐增加）
   windowColumns: [] as BackendTick[][],
   initialized: false,
 };
 
+// 根据行索引计算赔率：中间低，两端高，范围 1.1x~1.4x
+function calculateOdds(rowIndex: number, totalRows: number): number {
+  const center = (totalRows - 1) / 2; // 中心位置 (6行时为2.5)
+  const distanceFromCenter = Math.abs(rowIndex - center); // 距离中心的距离
+  const maxDistance = center; // 最大距离
+
+  // 归一化距离 [0, 1]，0=中心，1=边缘
+  const normalizedDistance = distanceFromCenter / maxDistance;
+
+  // 基础赔率范围：1.1 (10%) 到 1.4 (40%)
+  const minOdds = 1.1;
+  const maxOdds = 1.4;
+
+  // 基础赔率：中心最低，边缘最高
+  const baseOdds = minOdds + (maxOdds - minOdds) * normalizedDistance;
+
+  // 添加随机波动 ±0.05，但不超出范围
+  const randomVariation = (Math.random() - 0.5) * 0.1;
+  const finalOdds = Math.max(minOdds, Math.min(maxOdds, baseOdds + randomVariation));
+
+  return finalOdds;
+}
+
 function generateColumn(columnIndex: number, basisPrice: number): BackendTick[] {
   const expiryTime = Date.now() + 12000;
+  const totalRows = PRICE_RANGES.length;
 
   return PRICE_RANGES.map((range, rowIndex) => ({
     tickId: `col_${columnIndex}_row_${rowIndex}`,
-    odds: (1.5 + Math.random() * 2).toFixed(2),
-    status: 'pending',
+    odds: calculateOdds(rowIndex, totalRows).toFixed(2),
+    status: 'pending' as const,
     expiryTime,
     basisPrice: String(basisPrice),
     priceRange: {
-      min: range.percentMin === -100 ? null : basisPrice * (1 + range.percentMin / 100),
-      max: range.percentMax === 100 ? null : basisPrice * (1 + range.percentMax / 100),
+      min: range.max,
+      max: range.min,
       label: range.label,
-      percentMin: range.percentMin,
-      percentMax: range.percentMax,
+      percentMin: ((range.max - basisPrice) / basisPrice) * 100,
+      percentMax: ((range.min - basisPrice) / basisPrice) * 100,
     },
   }));
 }
 
-export function generateMockResponse(): BackendResponse {
+export function generateMockResponse(): MockBetResponse {
   const basePrice = 2700;
   const now = Date.now();
-  const intervalMs = 3000; // 每3秒产生新列
+  const intervalMs = 3000;
 
-  // 首次调用：初始化时间，但不生成任何列
   if (!mockState.initialized) {
     mockState.initialized = true;
     mockState.lastUpdateTime = now;
-    // 返回空数据，update: false
     return {
       success: true,
       data: {
@@ -92,21 +89,16 @@ export function generateMockResponse(): BackendResponse {
     };
   }
 
-  // 检查是否需要新增一列
   const shouldUpdate = now - mockState.lastUpdateTime >= intervalMs;
 
   if (shouldUpdate) {
     mockState.lastUpdateTime = now;
-
-    // 窗口未满4列时：直接新增
-    // 窗口已满4列时：移除最老的，新增一列
     if (mockState.windowColumns.length >= 4) {
       mockState.windowColumns.shift();
     }
     mockState.windowColumns.push(generateColumn(mockState.nextColumnIndex++, basePrice));
   }
 
-  // 返回当前窗口（右对齐到 col4）
   const cols = mockState.windowColumns;
   const len = cols.length;
 
@@ -126,7 +118,6 @@ export function generateMockResponse(): BackendResponse {
   };
 }
 
-// 重置 mock 状态（用于测试）
 export function resetMockState() {
   mockState = {
     lastUpdateTime: 0,

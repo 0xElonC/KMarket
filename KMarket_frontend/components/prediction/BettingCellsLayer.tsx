@@ -1,51 +1,7 @@
 import React, { useEffect, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { BetCell } from '../../types';
-
-// 根据 betType 获取单元格样式
-const getCellStyle = (status: string, betType: 'high' | 'low', isLocked: boolean) => {
-  if (status === 'win' || status === 'fail') {
-    return 'bet-cell-base';
-  }
-  if (status === 'selected') {
-    if (betType === 'high') {
-      return isLocked ? 'bet-cell-base bet-cell-selected-high-deep' : 'bet-cell-base bet-cell-selected-high';
-    }
-    return isLocked ? 'bet-cell-base bet-cell-selected-low-deep' : 'bet-cell-base bet-cell-selected-low';
-  }
-  return {
-    default: 'bet-cell-base',
-    dissolved: 'bet-cell-base bet-cell-dissolved'
-  }[status] || 'bet-cell-base';
-};
-
-// 根据 betType 获取标签颜色
-const getLabelColor = (status: string, betType: 'high' | 'low', isLockedDefault: boolean) => {
-  if (isLockedDefault || status === 'win' || status === 'fail') {
-    return 'text-gray-500';
-  }
-  if (status === 'default') {
-    return betType === 'high' ? 'text-emerald-600 group-hover:text-emerald-400' : 'text-red-600 group-hover:text-red-400';
-  }
-  if (status === 'selected') {
-    return betType === 'high' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold';
-  }
-  return 'text-gray-600';
-};
-
-// 根据 betType 获取赔率颜色
-const getOddsColor = (status: string, betType: 'high' | 'low', isLockedDefault: boolean) => {
-  if (isLockedDefault || status === 'win' || status === 'fail') {
-    return 'text-gray-500';
-  }
-  if (status === 'default') {
-    return betType === 'high' ? 'text-emerald-500/70 text-glow-hover' : 'text-red-500/70 text-glow-hover';
-  }
-  if (status === 'selected') {
-    return 'text-white font-bold drop-shadow-md';
-  }
-  return 'text-gray-500';
-};
+import { getCellStyle, getLabelColor, getOddsColor } from '../../utils/cellStyles';
 
 interface Particle {
   x: number;
@@ -86,6 +42,8 @@ interface BettingCellsLayerProps {
   rowHeightPx?: number;
   scrollOffsetPx?: number;
   scrollOffsetPercent?: number;
+  smoothScrollPxRef?: React.MutableRefObject<number>;
+  panOffsetPx?: number;
   lockLineX?: number;
   lockLinePercent?: number;
   lockTimeSec?: number;  // 新增: 基于时间的 Lock 判定 (秒)
@@ -158,6 +116,8 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
   rowHeightPx,
   scrollOffsetPx = 0,
   scrollOffsetPercent = 0,
+  smoothScrollPxRef,
+  panOffsetPx = 0,
   lockLineX = 0,
   lockLinePercent = 0,
   lockTimeSec = 5,
@@ -185,6 +145,8 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
     rowHeightPx,
     scrollOffsetPx,
     scrollOffsetPercent,
+    smoothScrollPxRef,
+    panOffsetPx,
     totalCols,
     usePx,
     defaultBetAmount,
@@ -195,6 +157,8 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
     rowHeightPx,
     scrollOffsetPx,
     scrollOffsetPercent,
+    smoothScrollPxRef,
+    panOffsetPx,
     totalCols,
     usePx,
     defaultBetAmount,
@@ -207,7 +171,17 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
       return { x: 0, y: 0, width: 0, height: 0 };
     }
 
-    const { gridRows, gridWidthPx, rowHeightPx, scrollOffsetPx, scrollOffsetPercent, totalCols, usePx } = propsRef.current;
+    const {
+      gridRows,
+      gridWidthPx,
+      rowHeightPx,
+      scrollOffsetPx,
+      scrollOffsetPercent,
+      smoothScrollPxRef,
+      panOffsetPx,
+      totalCols,
+      usePx
+    } = propsRef.current;
     const viewportRect = viewport.getBoundingClientRect();
     const cellWidth = usePx && (gridWidthPx ?? 0) > 0
       ? (gridWidthPx as number)
@@ -215,26 +189,29 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
     const cellHeight = usePx && (rowHeightPx ?? 0) > 0
       ? (rowHeightPx as number)
       : viewportRect.height / gridRows;
+    const smoothScrollPx = smoothScrollPxRef?.current;
     const scrollOffset = usePx
-      ? scrollOffsetPx
+      ? (smoothScrollPx ?? scrollOffsetPx)
       : (viewportRect.width * (scrollOffsetPercent / 100));
 
     const screenX = viewportRect.left + (cell.col * cellWidth) - scrollOffset + cellWidth / 2;
-    const screenY = viewportRect.top + (cell.row * cellHeight) + cellHeight / 2;
+    const screenY = viewportRect.top + (cell.row * cellHeight) + cellHeight / 2 + panOffsetPx;
 
     return { x: screenX, y: screenY, width: cellWidth, height: cellHeight };
   }, []);
 
-  // 生成爆炸粒子 - 减少粒子数量提升性能
+  // 生成爆炸粒子 - 适中的爆炸效果
   const spawnExplosion = useCallback((x: number, y: number, color: string) => {
-    for (let i = 0; i < 15; i++) {  // 减少到 15 个粒子
+    for (let i = 0; i < 25; i++) {  // 25 个粒子
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 3 + Math.random() * 6;  // 适中的速度
       particlesRef.current.push({
         x, y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
         life: 1,
         color,
-        size: 2 + Math.random() * 2,
+        size: 2 + Math.random() * 3,  // 适中的粒子大小
       });
     }
   }, []);
@@ -243,6 +220,13 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
   useEffect(() => {
     cells.forEach(cell => {
       if (cell.status === 'win' && !processedCellsRef.current.has(cell.id)) {
+        console.log('🎆 触发爆炸动画', {
+          cellId: cell.id,
+          row: cell.row,
+          col: cell.col,
+          betType: cell.betType,
+          status: cell.status,
+        });
         const pos = getCellScreenPosition(cell);
         const winColor = cell.betType === 'high' ? '#10b981' : '#ef4444';
         spawnExplosion(pos.x, pos.y, winColor);
@@ -322,14 +306,14 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
           p.x += p.vx * dt;
           p.y += p.vy * dt;
           p.vy += 0.2 * dt;
-          p.life -= 0.03 * dt;
+          p.life -= 0.025 * dt;  // 稍微慢一点消失
 
           if (p.life <= 0) return false;
 
           ctx.globalAlpha = p.life;
           ctx.fillStyle = p.color;
           ctx.shadowColor = p.color;
-          ctx.shadowBlur = p.size * 2;
+          ctx.shadowBlur = p.size * 3;  // 稍微增强发光
           ctx.beginPath();
           ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
           ctx.fill();
@@ -429,8 +413,9 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
           : cell.row * cellHeightPercent;
 
         // 位置基准 Lock 判定: 列的左边缘到达 Lock 线位置时锁定
+        const smoothScrollPx = smoothScrollPxRef?.current;
         const cellLeftInView = usePx
-          ? (left as number) - scrollOffsetPx
+          ? (left as number) - (smoothScrollPx ?? scrollOffsetPx)
           : (left as number) - scrollOffsetPercent;
         const isLocked = usePx ? cellLeftInView <= lockLineX : cellLeftInView <= lockLinePercent;
         const isLockedDefault = isLocked && cell.status === 'default';
