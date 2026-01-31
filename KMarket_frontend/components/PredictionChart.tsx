@@ -393,6 +393,8 @@ export function PredictionChart({
               rowHeightPx={rowHeightPx}
               scrollOffsetPx={scrollOffsetPx}
               scrollOffsetPercent={scrollOffsetPercent}
+              smoothScrollPxRef={smoothScrollRef}
+              panOffsetPx={panOffsetPx}
               lockLineX={lockLineX}
               lockLinePercent={lockLinePercent}
               lockTimeSec={lockTimeSec}

@@ -8,12 +8,12 @@ import { ChartToolbar } from '../components/terminal/ChartToolbar';
 import { useBettingGrid } from '../hooks/useBettingGrid';
 import { useBetTicks } from '../hooks/useBetTicks';
 import { useMockCandles } from '../hooks/useMockCandles';
-import { useBetResolution } from '../hooks/useBetResolution';
+import { useBetResolution, SettlementResult } from '../hooks/useBetResolution';
 import { useBinanceCandles } from '../hooks/useBinanceCandles';
+import { useSettlementHistory } from '../hooks/useSettlementHistory';
 import {
   cryptoAssets,
   forexAssets,
-  historyItems
 } from '../data/terminal';
 
 // K项目风格：中心价格线（结算线）在40%位置
@@ -67,6 +67,30 @@ export default function Terminal({
   const [panOffset, setPanOffset] = useState(0);
   const [isDemoMode, setIsDemoMode] = useState(true); // 演示模式开关，默认开启
   const isEthSymbol = activeSymbol.symbol === 'ETH';
+
+  // 结算历史记录（本地存储）
+  const { historyItems, addSettlement, clearHistory } = useSettlementHistory();
+
+  // 结算回调处理
+  // 盈亏计算：只涉及收益部分（倍率-1），不是全部本金
+  // 赢了：+收益部分，输了：-收益部分
+  const handleSettlement = useCallback((result: SettlementResult) => {
+    const profitRate = result.odds - 1; // 收益率，如 1.3x -> 0.3 (30%)
+    const profitAmount = result.betAmount * profitRate;
+    const payout = result.result === 'win' ? profitAmount : -profitAmount;
+
+    addSettlement({
+      symbol: `${activeSymbol.symbol}/USD`,
+      entryPrice: result.entryPrice.toFixed(2),
+      settlementPrice: result.settlementPrice.toFixed(2),
+      rangeLabel: result.rangeLabel,
+      betType: result.betType,
+      odds: result.odds,
+      betAmount: result.betAmount,
+      payout,
+      result: result.result,
+    });
+  }, [activeSymbol.symbol, addSettlement]);
 
   // K项目风格：滚动驱动 updateCount（替代定时器）
   const handleScrollTick = useCallback((uc: number) => {
@@ -124,6 +148,10 @@ export default function Terminal({
     betUpdateCount: number;
     targetUpdateCount: number;
     betType: BetType;
+    odds?: number;
+    betAmount?: number;
+    entryPrice?: number;
+    rangeLabel?: string;
   }>>([]);
 
   // Effect: 自动判定下注结果
@@ -134,6 +162,7 @@ export default function Terminal({
     setActiveBets,
     setBettingCells,
     gridRows: GRID_ROWS,
+    onSettlement: handleSettlement,
   });
 
   const lastCandle = chartData.length > 0 ? chartData[chartData.length - 1] : { close: 0 };
@@ -163,7 +192,7 @@ export default function Terminal({
     // 找到对应的格子获取 betType
     const cell = bettingCells.find(c => c.id === cellId);
     if (!cell) return;
-    const { row, col, betType } = cell;
+    const { row, col, betType, odds, label } = cell;
 
     // 统一基于列位置计算结算时间（与滚动驱动的 updateCount 匹配）
     const centerLineCol = VISIBLE_COLS * CENTER_LINE_RATIO;
@@ -182,14 +211,18 @@ export default function Terminal({
       需要等待: updateCountsToWait,
     });
 
-    // 记录下注信息
+    // 记录下注信息（包含结算所需的额外数据）
     setActiveBets(prev => [...prev, {
       cellId,
       row,
       col,
       betUpdateCount: updateCount,
       targetUpdateCount,
-      betType
+      betType,
+      odds: odds ?? 1.5,
+      betAmount: betAmount,
+      entryPrice: currentPrice ?? 0,
+      rangeLabel: label ?? (betType === 'high' ? 'High' : 'Low'),
     }]);
 
     // 更新格子状态为selected (K项目风格：active)

@@ -26,8 +26,9 @@ const PRICE_ZONES = [
 
 /**
  * 基础赔率配置 (边缘区间高，中心区间低)
+ * 控制在 10% ~ 50% 收益范围 (1.1x ~ 1.5x)
  */
-const BASE_ODDS = [3.0, 2.2, 1.6, 1.6, 2.2, 3.0];
+const BASE_ODDS = [1.45, 1.30, 1.15, 1.15, 1.30, 1.45];
 
 /**
  * 下单时锁定的数据结构
@@ -453,18 +454,19 @@ export class BlockManagerService implements OnModuleInit {
 
     /**
      * 计算动态赔率
+     * 控制在 10% ~ 50% 收益范围 (1.1x ~ 1.5x)
      */
     private calculateDynamicOdds(rowIdx: number, timeToSettleSec: number): number {
         const baseOdds = BASE_ODDS[rowIdx];
 
-        // 时间因子: 越远离结算赔率越高 (最多 +50%)
+        // 时间因子: 越远离结算赔率略高 (最多 +5%)
         const maxTimeSec = this.columnLifetimeMs / 1000; // 35 秒
-        const timeFactor = 1 + (Math.min(timeToSettleSec, maxTimeSec) / maxTimeSec) * 0.5;
+        const timeFactor = 1 + (Math.min(timeToSettleSec, maxTimeSec) / maxTimeSec) * 0.05;
 
         const odds = baseOdds * timeFactor;
 
-        // 限制范围 [1.1, 10.0]
-        return Math.round(Math.max(1.1, Math.min(10.0, odds)) * 100) / 100;
+        // 限制范围 [1.1, 1.5] (10% ~ 50% 收益)
+        return Math.round(Math.max(1.1, Math.min(1.5, odds)) * 100) / 100;
     }
 
     /**

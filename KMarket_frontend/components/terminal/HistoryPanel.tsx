@@ -37,7 +37,14 @@ const HistoryPanel = React.memo(function HistoryPanel({ items, rangeLabels, labe
         <span className="text-[10px] text-gray-600 font-mono">{labels.window}</span>
       </div>
       <div className="flex-1 min-h-0 neu-in rounded-xl p-4 overflow-y-auto space-y-3 custom-scrollbar">
-        {items.map((item) => {
+        {items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <History size={32} className="mb-2 opacity-30" />
+            <span className="text-xs text-center">No settlement history yet</span>
+            <span className="text-[10px] text-gray-600 mt-1">Place a bet to get started</span>
+          </div>
+        ) : (
+          items.map((item) => {
           const isWin = item.tone === 'win';
           const isLive = item.tone === 'live';
           const statusLabel = isWin ? labels.win : isLive ? labels.live : labels.loss;
@@ -79,7 +86,8 @@ const HistoryPanel = React.memo(function HistoryPanel({ items, rangeLabels, labe
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
     </aside>
   );
