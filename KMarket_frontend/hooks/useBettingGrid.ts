@@ -1,43 +1,70 @@
-import { useEffect, useState } from 'react';
-import { BetCell } from '../types';
+import { useEffect, useState, useRef } from 'react';
+import { BetCell, BetType } from '../types';
+import { BackendTick } from '../data/mockBetTicks';
 import { CANDLES_PER_GRID } from '../utils/chartConfig';
-import { generateBettingCells, generateNewColumn } from '../data/terminal';
 
 interface UseBettingGridOptions {
-  updateCount: number;
-  initialCols: number;
-  gridRowStart: number;
-  gridTotalRows: number;
   visibleRows: number;
+  visibleCols: number;
+  updateCount: number;
+  newColumn?: BackendTick[] | null;
 }
 
 export function useBettingGrid({
-  updateCount,
-  initialCols,
-  gridRowStart,
-  gridTotalRows,
-  visibleRows
+  visibleRows,
+  visibleCols = 9,
+  updateCount = 0,
+  newColumn = null,
 }: UseBettingGridOptions) {
-  const [bettingCells, setBettingCells] = useState<BetCell[]>(() =>
-    generateBettingCells(initialCols, gridRowStart, gridTotalRows, visibleRows)
-  );
-  const [gridColsTotal, setGridColsTotal] = useState(initialCols);
+  const [bettingCells, setBettingCells] = useState<BetCell[]>([]);
+  const knownColumnsRef = useRef<Set<string>>(new Set());
+  // 递增的列索引，确保每次新增的列位置连续
+  const nextColRef = useRef<number>(-1);
 
   useEffect(() => {
-    const neededCols = Math.max(
-      initialCols,
-      initialCols + Math.floor(updateCount / CANDLES_PER_GRID)
-    );
+    if (!newColumn || newColumn.length === 0) return;
 
-    if (neededCols > gridColsTotal) {
-      const newCells: BetCell[] = [];
-      for (let col = gridColsTotal; col < neededCols; col += 1) {
-        newCells.push(...generateNewColumn(col, gridRowStart, gridTotalRows, visibleRows));
-      }
-      setBettingCells(prev => [...prev, ...newCells]);
-      setGridColsTotal(neededCols);
+    const colTickId = newColumn[0]?.tickId ?? '';
+    if (!colTickId || knownColumnsRef.current.has(colTickId)) return;
+
+    knownColumnsRef.current.add(colTickId);
+
+    // 计算当前视口右边缘位置
+    const scrolledCols = updateCount / CANDLES_PER_GRID;
+    const viewportRightEdge = scrolledCols + visibleCols;
+
+    // 新列位置：取 nextCol 和视口右边缘的较大值，确保在视口外且连续
+    let colIndex: number;
+    if (nextColRef.current < 0) {
+      // 首次：在视口右边缘外 1 列
+      colIndex = Math.ceil(viewportRightEdge);
+    } else {
+      // 后续：递增，但不小于视口右边缘
+      colIndex = Math.max(nextColRef.current, Math.ceil(viewportRightEdge));
     }
-  }, [updateCount, gridColsTotal, gridRowStart, gridTotalRows, initialCols, visibleRows]);
+    nextColRef.current = colIndex + 1;
+
+    const halfVisible = Math.floor(visibleRows / 2);
+
+    const newCells: BetCell[] = newColumn.map((tick, rowIndex) => {
+      const betType: BetType = rowIndex < halfVisible ? 'high' : 'low';
+      return {
+        id: `${rowIndex}-${colIndex}`,
+        row: rowIndex,
+        col: colIndex,
+        label: tick.priceRange.label,
+        odds: parseFloat(tick.odds),
+        status: tick.status === 'settled' ? 'dissolved' : 'default',
+        betType,
+        tickId: tick.tickId,
+        expiryTime: tick.expiryTime,
+        basisPrice: parseFloat(tick.basisPrice),
+        priceRange: tick.priceRange,
+      };
+    });
+
+    setBettingCells(prev => [...prev, ...newCells]);
+  }, [newColumn, visibleRows, visibleCols, updateCount]);
 
   return { bettingCells, setBettingCells };
 }

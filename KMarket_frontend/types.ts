@@ -56,7 +56,7 @@ export interface BetCell {
   id: string;
   row: number;        // 价格区间行
   col: number;        // 时间列
-  label: string;      // 显示标签 (High/Low)
+  label: string;      // 显示标签 (High/Low 或后端 priceRange.label)
   odds: number;       // 赔率
   status: BetCellStatus;
   betType: BetType;   // 买升或买跌
@@ -65,6 +65,17 @@ export interface BetCell {
   priceHigh?: number; // 格子对应的价格上限
   priceLow?: number;  // 格子对应的价格下限
   betTime?: number;   // 下注时间戳
+  // 后端数据字段
+  tickId?: string;
+  expiryTime?: number;
+  basisPrice?: number;
+  priceRange?: {
+    min: number | null;
+    max: number | null;
+    label: string;
+    percentMin: number;
+    percentMax: number;
+  };
 }
 
 // 投注网格配置

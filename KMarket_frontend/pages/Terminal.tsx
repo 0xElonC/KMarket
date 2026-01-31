@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { PredictionChart } from '../components/PredictionChart';
-import { BetCell, BetType } from '../types';
+import { BetType } from '../types';
 import { CANDLES_PER_GRID } from '../utils/chartConfig';
 import { HistoryPanel } from '../components/terminal/HistoryPanel';
 import { ChartToolbar } from '../components/terminal/ChartToolbar';
 import { useBettingGrid } from '../hooks/useBettingGrid';
+import { useBetTicks } from '../hooks/useBetTicks';
 import { useMockCandles } from '../hooks/useMockCandles';
 import { useBetResolution } from '../hooks/useBetResolution';
 import { useBinanceCandles } from '../hooks/useBinanceCandles';
@@ -18,14 +19,9 @@ import {
 // K项目风格：中心价格线（结算线）在40%位置
 const CENTER_LINE_RATIO = 0.4;
 
-
 const GRID_ROWS = 6;
 const GRID_BUFFER_ROWS = 12;
-const GRID_ROW_START = -GRID_BUFFER_ROWS;
-const GRID_TOTAL_ROWS = GRID_ROWS + GRID_BUFFER_ROWS * 2;
 const VISIBLE_COLS = 9;
-const GRID_BUFFER_COLS = 3;
-const INITIAL_GRID_COLS = VISIBLE_COLS + GRID_BUFFER_COLS;
 
 export default function Terminal({
   requestConfirm,
@@ -105,13 +101,21 @@ export default function Terminal({
     : null;
   const currentPrice = isLiveReady ? liveCurrentPrice : mockCurrentPrice;
   const priceData = isLiveReady ? livePriceData : [];
-  const { bettingCells, setBettingCells } = useBettingGrid({
-    updateCount,
-    initialCols: INITIAL_GRID_COLS,
-    gridRowStart: GRID_ROW_START,
-    gridTotalRows: GRID_TOTAL_ROWS,
-    visibleRows: GRID_ROWS
+
+  // 后端下注数据轮询（用于获取新增的列）
+  const { newColumn } = useBetTicks({
+    enabled: true,
+    pollInterval: 1000,
   });
+
+  // 将后端 tick 数据转换为格子
+  const { bettingCells, setBettingCells } = useBettingGrid({
+    visibleRows: GRID_ROWS,
+    visibleCols: VISIBLE_COLS,
+    updateCount,
+    newColumn,
+  });
+
   // 记录活跃的下注，用于自动判定
   const [activeBets, setActiveBets] = useState<Array<{
     cellId: string;
@@ -122,11 +126,7 @@ export default function Terminal({
     betType: BetType;
   }>>([]);
 
-  // K项目风格：updateCount 由 PredictionChart 的 onScrollTick 驱动，无需定时器
-
-  // Effect: 自动新增预测网格列逻辑已抽离到 useBettingGrid
-
-  // Effect: 自动判定下注结果 - K项目风格：使用实时价格
+  // Effect: 自动判定下注结果
   useBetResolution({
     chartData,
     currentPrice,
@@ -135,8 +135,6 @@ export default function Terminal({
     setActiveBets,
     setBettingCells,
     gridRows: GRID_ROWS,
-    gridRowStart: GRID_ROW_START,
-    gridTotalRows: GRID_TOTAL_ROWS
   });
 
   const lastCandle = chartData.length > 0 ? chartData[chartData.length - 1] : { close: 0 };
@@ -151,23 +149,17 @@ export default function Terminal({
 
   // 下注处理 - K项目风格：双击下注
   const handleBet = (cellId: string, amount: number) => {
-    // 解析cellId获取row和col（支持负数行）
-    const match = cellId.match(/^(-?\d+)-(-?\d+)$/);
-    if (!match) return;
-    const row = Number(match[1]);
-    const col = Number(match[2]);
-
     // 找到对应的格子获取 betType
     const cell = bettingCells.find(c => c.id === cellId);
     if (!cell) return;
-    const betType = cell.betType;
+    const { row, col, betType } = cell;
 
-    // K项目风格：计算到达中心价格线需要的updateCount
+    // 统一基于列位置计算结算时间（与滚动驱动的 updateCount 匹配）
     const centerLineCol = VISIBLE_COLS * CENTER_LINE_RATIO;
     const currentCenterCol = centerLineCol + updateCount / CANDLES_PER_GRID;
     const colsToCenterLine = col - currentCenterCol;
     const updateCountsToWait = Math.round(colsToCenterLine * CANDLES_PER_GRID);
-    const targetUpdateCount = updateCount + updateCountsToWait;
+    const targetUpdateCount = updateCount + Math.max(0, updateCountsToWait);
 
     console.log('🎲 下注成功！', {
       cellId,
@@ -177,7 +169,6 @@ export default function Terminal({
       当前updateCount: updateCount,
       目标updateCount: targetUpdateCount,
       需要等待: updateCountsToWait,
-      预计时间: `${updateCountsToWait * 2}秒`
     });
 
     // 记录下注信息

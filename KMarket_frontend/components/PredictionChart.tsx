@@ -65,9 +65,8 @@ export function PredictionChart({
   }
   const pricePointsRef = useRef<UpdateCountPricePoint[]>([]);
 
-  // K项目风格：价格平滑动画状态
+  // K项目风格：价格平滑动画状态（只用 ref，不触发重渲染）
   const [basePrice, setBasePrice] = useState<number | null>(null);
-  const [animPrice, setAnimPrice] = useState<number | null>(null);
   const basePriceRef = useRef<number | null>(null);
   const animPriceRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(performance.now());
@@ -86,6 +85,7 @@ export function PredictionChart({
   const rowHeightPx = viewportSize.height > 0 ? viewportSize.height / gridRows : 0;
   const scrollWidthPx = gridWidthPx * scrollTotalCols;
   const candleStepPx = gridWidthPx / CANDLES_PER_GRID;
+
   // BettingCellsLayer 使用离散偏移做锁定线判定
   const scrollOffsetPx = candleStepPx * updateCount;
   const scrollOffsetPercent = gridWidthPx > 0 ? (scrollOffsetPx / gridWidthPx) * (100 / scrollTotalCols) : 0;
@@ -99,7 +99,6 @@ export function PredictionChart({
     if (basePrice === null) {
       const initialBasePrice = 2750;
       setBasePrice(initialBasePrice);
-      setAnimPrice(currentPrice ?? initialBasePrice);
       basePriceRef.current = initialBasePrice;
       animPriceRef.current = currentPrice ?? initialBasePrice;
     }
@@ -236,10 +235,9 @@ export function PredictionChart({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
-      // K项目风格：平滑价格动画
+      // K项目风格：平滑价格动画（只更新 ref，不触发 React 重渲染）
       if (currentPrice !== null && animPriceRef.current !== null) {
         animPriceRef.current += (currentPrice - animPriceRef.current) * FLOW_CONFIG.PRICE_SMOOTH;
-        setAnimPrice(animPriceRef.current);
       }
 
       // 注意：不再更新 basePrice，保持Y坐标系固定，避免价格曲线与网格偏离
