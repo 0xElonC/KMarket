@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Globe, Wallet, TrendingUp, AlertTriangle } from 'lucide-react';
+import { Bell, Globe, Wallet, TrendingUp, AlertTriangle, LogIn, Loader2, CheckCircle } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { Page } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -13,7 +13,14 @@ export default function Header({
   onNavigate: (page: Page) => void;
 }) {
   const { t, language, setLanguage } = useLanguage();
-  const { isCorrectChain, switchToPolygon, usdcBalance, isLoadingBalances } = useWallet();
+  const { 
+    isSupportedChain, 
+    usdcBalance, 
+    isLoadingBalances,
+    isAuthenticated,
+    isAuthLoading,
+    login,
+  } = useWallet();
   const [hasNotifications, setHasNotifications] = React.useState(true);
 
   return (
@@ -113,20 +120,43 @@ export default function Header({
                        );
                      }
 
-                     if (!isCorrectChain) {
-                       return (
-                         <button
-                           onClick={switchToPolygon}
-                           className="neu-btn header-solid-btn px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold text-amber-500 hover:text-amber-400 transition-all active:scale-95"
-                         >
-                           <AlertTriangle size={16} />
-                           <span>{t.header.wrongNetwork}</span>
-                         </button>
-                       );
-                     }
+                    if (!isSupportedChain) {
+                      return (
+                        <button
+                          onClick={openChainModal}
+                          className="neu-btn header-solid-btn px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold text-amber-500 hover:text-amber-400 transition-all active:scale-95"
+                        >
+                          <AlertTriangle size={16} />
+                          <span>{t.header.wrongNetwork}</span>
+                        </button>
+                      );
+                    }
 
                      return (
                        <>
+                         {/* Login Button - Show if not authenticated */}
+                         {!isAuthenticated && (
+                           <button
+                             onClick={login}
+                             disabled={isAuthLoading}
+                             className="neu-btn header-solid-btn px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold text-accent-green hover:text-white hover:bg-accent-green/20 transition-all active:scale-95 disabled:opacity-50"
+                           >
+                             {isAuthLoading ? (
+                               <Loader2 size={16} className="animate-spin" />
+                             ) : (
+                               <LogIn size={16} />
+                             )}
+                             <span>{isAuthLoading ? 'Signing...' : 'Sign In'}</span>
+                           </button>
+                         )}
+
+                         {/* Auth Status Indicator */}
+                         {isAuthenticated && (
+                           <div className="hidden lg:flex neu-btn header-solid-btn px-2 py-2 rounded-lg items-center gap-1 text-accent-green" title="Authenticated">
+                             <CheckCircle size={14} />
+                           </div>
+                         )}
+
                          {/* Balance Display */}
                          <div className="hidden lg:flex neu-btn header-solid-btn px-3 py-2 rounded-xl items-center gap-2 text-sm font-bold text-primary">
                            <span className="font-digital">
@@ -140,12 +170,14 @@ export default function Header({
                            className="neu-btn header-solid-btn p-2 rounded-lg flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-primary transition-colors"
                            title={chain.name}
                          >
-                           {chain.hasIcon && chain.iconUrl && (
+                           {chain.hasIcon && chain.iconUrl ? (
                              <img
                                alt={chain.name ?? 'Chain icon'}
                                src={chain.iconUrl}
                                className="size-4 rounded-full"
                              />
+                           ) : (
+                             <span className="text-xs">{chain.name?.slice(0, 3)}</span>
                            )}
                          </button>
 

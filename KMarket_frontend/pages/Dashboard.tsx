@@ -1,8 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useWallet } from '../contexts/WalletContext';
+import { useProxyWallet } from '../hooks/useProxyWallet';
+import DepositWithdrawModal from '../components/DepositWithdrawModal';
 
 export default function Dashboard() {
   const { t } = useLanguage();
+  const { isConnected, usdcBalance } = useWallet();
+  const { depositBalance, hasProxy, isLoading, isCreatingProxy, proxyAddress } = useProxyWallet();
+  const [modalMode, setModalMode] = useState<'deposit' | 'withdraw' | null>(null);
+
+  // Calculate total balance (wallet + trading)
+  const totalBalance = isConnected 
+    ? (parseFloat(usdcBalance) + parseFloat(depositBalance)).toFixed(2)
+    : '0.00';
+
+  const handleOpenDeposit = () => setModalMode('deposit');
+  const handleOpenWithdraw = () => setModalMode('withdraw');
+  const handleCloseModal = () => setModalMode(null);
 
   return (
     <div className="dashboard-skin neu-base flex flex-1 min-h-0 min-w-0 flex-col xl:flex-row gap-8 overflow-visible">
@@ -71,17 +86,36 @@ export default function Dashboard() {
             </div>
             <div className="neu-in neu-deep p-6 rounded-2xl flex items-center justify-center bg-gray-100/50 dark:bg-transparent">
               <span className="text-4xl md:text-5xl lg:text-6xl font-mono font-bold text-gray-700 tracking-tighter dark:text-white shadow-black drop-shadow-lg">
-                $14,250.45
+                {isLoading ? '...' : `$${totalBalance}`}
               </span>
             </div>
+            {/* Balance breakdown */}
+            {isConnected && (
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-white/5">
+                  <span className="text-gray-400">Wallet:</span>
+                  <span className="font-mono text-gray-300">${usdcBalance}</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-primary/5">
+                  <span className="text-gray-400">Trading:</span>
+                  <span className="font-mono text-primary">${parseFloat(depositBalance).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
-              <button className="neu-btn py-4 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:text-accent-green transition-colors group dark:text-gray-200 dark:hover:text-accent-green">
+              <button 
+                onClick={handleOpenDeposit}
+                className="neu-btn py-4 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:text-accent-green transition-colors group dark:text-gray-200 dark:hover:text-accent-green"
+              >
                 <div className="size-8 rounded-full bg-accent-green/10 flex items-center justify-center text-accent-green group-hover:bg-accent-green group-hover:text-white transition-colors dark:bg-accent-green/20">
                   <span className="material-symbols-outlined text-lg">add</span>
                 </div>
                 <span className="font-bold">{t.dashboard.deposit}</span>
               </button>
-              <button className="neu-btn py-4 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:text-primary transition-colors group dark:text-gray-200 dark:hover:text-blue-400">
+              <button 
+                onClick={handleOpenWithdraw}
+                className="neu-btn py-4 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:text-primary transition-colors group dark:text-gray-200 dark:hover:text-blue-400"
+              >
                 <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-colors dark:bg-blue-500/20 dark:text-blue-400">
                   <span className="material-symbols-outlined text-lg">arrow_outward</span>
                 </div>
@@ -109,13 +143,38 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-            <div className="neu-in p-4 rounded-xl border border-primary/10 bg-primary/5 dark:bg-blue-900/10 dark:border-blue-500/10">
+            {/* Proxy wallet status */}
+            <div className={`neu-in p-4 rounded-xl border ${
+              isCreatingProxy 
+                ? 'border-primary/10 bg-primary/5' 
+                : hasProxy 
+                  ? 'border-accent-green/10 bg-accent-green/5' 
+                  : 'border-yellow-500/10 bg-yellow-500/5'
+            }`}>
               <div className="flex items-center gap-3 mb-2">
-                <span className="material-symbols-outlined text-primary dark:text-blue-400">local_fire_department</span>
-                <span className="font-bold text-primary text-sm dark:text-blue-400">{t.dashboard.hotPromo}</span>
+                {isCreatingProxy ? (
+                  <>
+                    <span className="material-symbols-outlined text-primary animate-spin">progress_activity</span>
+                    <span className="font-bold text-sm text-primary">Creating Trading Wallet...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className={`material-symbols-outlined ${hasProxy ? 'text-accent-green' : 'text-yellow-500'}`}>
+                      {hasProxy ? 'check_circle' : 'info'}
+                    </span>
+                    <span className={`font-bold text-sm ${hasProxy ? 'text-accent-green' : 'text-yellow-500'}`}>
+                      {hasProxy ? 'Trading Wallet Active' : 'Setup Required'}
+                    </span>
+                  </>
+                )}
               </div>
               <p className="text-xs text-gray-600 leading-relaxed dark:text-gray-400">
-                {t.dashboard.promoDesc}
+                {isCreatingProxy 
+                  ? 'Please confirm the transaction in your wallet to create your trading wallet.'
+                  : hasProxy 
+                    ? `Your trading wallet is ready. Address: ${proxyAddress?.slice(0, 6)}...${proxyAddress?.slice(-4)}`
+                    : 'A trading wallet will be created automatically when you connect.'
+                }
               </p>
             </div>
           </div>
@@ -352,6 +411,13 @@ export default function Dashboard() {
           </div>
         </div>
       </aside>
+
+      {/* Deposit/Withdraw Modal */}
+      <DepositWithdrawModal
+        isOpen={modalMode !== null}
+        onClose={handleCloseModal}
+        mode={modalMode || 'deposit'}
+      />
     </div>
   );
 }

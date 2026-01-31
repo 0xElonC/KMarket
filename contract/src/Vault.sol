@@ -222,15 +222,16 @@ contract Vault is ERC20, ReentrancyGuard, Ownable {
      * @param user The user's EOA address
      * @param amount The amount to transfer
      * @dev Called by authorized proxy wallets during withdrawal
+     *      Users can always withdraw their own funds - no LP liquidity check needed
      */
     function transferToUser(address user, uint256 amount) external nonReentrant {
         if (!authorizedProxies[msg.sender]) revert OnlyAuthorizedProxy();
         if (amount == 0) revert InvalidAmount();
         if (amount > totalUserBalance) revert InsufficientBalance();
         
-        // Check available liquidity
-        uint256 available = getAvailableLiquidity();
-        if (amount > available) revert InsufficientLiquidity();
+        // Ensure vault has enough USDC (should always be true if accounting is correct)
+        uint256 vaultBalance = USDC.balanceOf(address(this));
+        if (amount > vaultBalance) revert InsufficientLiquidity();
         
         // Update user balance tracking
         totalUserBalance -= amount;
