@@ -208,6 +208,33 @@
   text-shadow: 0 0 5px rgba(34, 211, 238, 0.6);
 }
 
+/* Frosted glass card */
+.frosted-glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+}
+
+/* Performance card neon bars */
+.bg-neon-bar {
+  background: linear-gradient(to top, #3b82f6, #06b6d4);
+}
+
+.bg-neon-bar-green {
+  background: linear-gradient(to top, #10b981, #34d399);
+}
+
+.bg-neon-bar-red {
+  background: linear-gradient(to top, #ef4444, #f87171);
+}
+
+.shadow-neon-glow {
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3);
+}
+
+
 /* 隐藏所有数字输入框的箭头 */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {
@@ -241,8 +268,27 @@ input[type="number"] {
   box-shadow: inset 2px 2px 4px rgba(21, 29, 41, 0.8), inset -2px -2px 4px rgba(39, 53, 77, 0.8);
 }
 
+.chart-line-glow {
+  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
+}
+
+.chart-segment {
+  transition: all 0.3s ease;
+}
+
+.chart-segment:hover {
+  filter: brightness(1.2);
+  transform: scale(1.02);
+  transform-origin: center;
+}
+
 .header-balance-glow {
   text-shadow: 0 0 2px rgba(59, 130, 246, 0.16);
+}
+
+/* Terminal container halo: ~33% tighter, ~20% dimmer */
+.terminal-shell.neu-out {
+  box-shadow: 4px 4px 8px rgba(21, 29, 41, 0.8), -4px -4px 8px rgba(39, 53, 77, 0.8);
 }
 
 /* Home card halos: reduce range ~50% and visibility ~20% */
@@ -720,4 +766,79 @@ input[type="number"] {
 [data-rk] button[aria-label="Close"]:hover {
   background: #121721 !important;
   box-shadow: inset 2px 2px 4px #151d29, inset -2px -2px 4px #27354d !important;
+}
+
+/* Dashboard account toggles */
+.neu-toggle-checkbox {
+  display: none;
+}
+
+.neu-toggle-wrapper {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.neu-toggle-label {
+  width: 50px;
+  height: 28px;
+  border-radius: 50px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background-color: #e0e5ec;
+  box-shadow: inset 3px 3px 6px #a3b1c6, inset -3px -3px 6px #ffffff;
+}
+
+.dark .neu-toggle-label {
+  background-color: #121721;
+  box-shadow: inset 3px 3px 6px #090c11, inset -3px -3px 6px #1b2231;
+}
+
+.neu-toggle-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+  background: #e0e5ec;
+  box-shadow: 2px 2px 5px #a3b1c6, -2px -2px 5px #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.dark .neu-toggle-btn {
+  background: #121721;
+  box-shadow: 2px 2px 5px #090c11, -2px -2px 5px #1b2231;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.neu-toggle-checkbox:checked + .neu-toggle-label .neu-toggle-btn {
+  left: 26px;
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+/* Remove glow/shadow for specific dashboard buttons */
+.neu-btn.neu-btn-no-shadow,
+.neu-btn.neu-btn-no-shadow:hover,
+.neu-btn.neu-btn-no-shadow:active,
+.neu-btn.neu-btn-no-shadow.active {
+  box-shadow: none;
+}
+
+.dashboard-skin .neu-btn.neu-btn-no-shadow,
+.dashboard-skin .neu-btn.neu-btn-no-shadow:hover,
+.dashboard-skin .neu-btn.neu-btn-no-shadow:active,
+.dashboard-skin .neu-btn.neu-btn-no-shadow.active,
+.dark .dashboard-skin .neu-btn.neu-btn-no-shadow,
+.dark .dashboard-skin .neu-btn.neu-btn-no-shadow:hover,
+.dark .dashboard-skin .neu-btn.neu-btn-no-shadow:active,
+.dark .dashboard-skin .neu-btn.neu-btn-no-shadow.active {
+  box-shadow: none;
 }

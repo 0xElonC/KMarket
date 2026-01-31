@@ -28,6 +28,7 @@ interface PredictionChartProps {
   visibleCols?: number;
   timeIntervals?: string[];
   updateCount?: number;
+  lockTimeSec?: number; // 基于时间的 Lock 判定 (秒)
 }
 
 export function PredictionChart({
@@ -43,7 +44,8 @@ export function PredictionChart({
   bufferRows = 0,
   visibleCols = DEFAULT_VISIBLE_COLS,
   timeIntervals = ['+10m', '+30m', '+1h'],
-  updateCount = 0
+  updateCount = 0,
+  lockTimeSec = 5
 }: PredictionChartProps) {
   const chartViewportRef = useRef<HTMLDivElement | null>(null);
   const priceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -215,6 +217,9 @@ export function PredictionChart({
 
     const width = viewportSize.width;
     const height = viewportSize.height;
+    const dynamicSpeed = width > 0
+      ? (width * (1 - LOCK_LINE_RATIO)) / FLOW_CONFIG.LOCK_TIME_SEC
+      : FLOW_CONFIG.SPEED;
     const dpr = window.devicePixelRatio || 1;
     const canvasWidth = Math.max(1, Math.round(width * dpr));
     const canvasHeight = Math.max(1, Math.round(height * dpr));
@@ -242,8 +247,8 @@ export function PredictionChart({
 
       // 注意：不再更新 basePrice，保持Y坐标系固定，避免价格曲线与网格偏离
 
-      // K项目风格：恒定速度平滑滚动
-      smoothScrollRef.current += FLOW_CONFIG.SPEED * dt;
+      // K项目风格：动态速度平滑滚动（固定30秒到Lock线）
+      smoothScrollRef.current += dynamicSpeed * dt;
       // 直接操作 DOM，避免每帧 React 重渲染
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.transform = `translateX(-${smoothScrollRef.current}px)`;
@@ -390,6 +395,7 @@ export function PredictionChart({
               scrollOffsetPercent={scrollOffsetPercent}
               lockLineX={lockLineX}
               lockLinePercent={lockLinePercent}
+              lockTimeSec={lockTimeSec}
               defaultBetAmount={DEFAULT_BET_AMOUNT}
               onBet={onBet}
             />

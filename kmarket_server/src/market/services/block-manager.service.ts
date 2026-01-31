@@ -1,189 +1,549 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 import { PriceStoreService } from './price-store.service';
 import { OddsCalculatorService } from './odds-calculator.service';
-import { TimeSlice, TickOdds } from '../dto/grid.dto';
+import {
+    GridCell,
+    PriceRange,
+    GridColumn,
+    StoredGrid,
+    ColumnGridResponseDto,
+    TimeSlice,
+} from '../dto/grid.dto';
+
+/**
+ * 价格区间配置 (6 行)
+ */
+const PRICE_ZONES = [
+    { label: '+2%↑', percentMin: 2.0, percentMax: 100 },
+    { label: '+1%~+2%', percentMin: 1.0, percentMax: 2.0 },
+    { label: '0~+1%', percentMin: 0, percentMax: 1.0 },
+    { label: '-1%~0', percentMin: -1.0, percentMax: 0 },
+    { label: '-2%~-1%', percentMin: -2.0, percentMax: -1.0 },
+    { label: '-2%↓', percentMin: -100, percentMax: -2.0 },
+];
+
+/**
+ * 基础赔率配置 (边缘区间高，中心区间低)
+ */
+const BASE_ODDS = [3.0, 2.2, 1.6, 1.6, 2.2, 3.0];
+
+/**
+ * 下单时锁定的数据结构
+ */
+export interface LockedBetData {
+    tickId: string;
+    expiryTime: number;
+    rowIndex: number;           // 1-6
+    basisPrice: string;
+    odds: string;
+    priceRange: {
+        min: number | null;
+        max: number | null;
+        percentMin: number;
+        percentMax: number;
+    };
+    lockedAt: number;           // 锁定时间戳
+}
 
 @Injectable()
 export class BlockManagerService implements OnModuleInit {
     private readonly logger = new Logger(BlockManagerService.name);
-    private readonly WINDOW_DURATION_SEC = 360; // 6 minutes
-    private readonly LOCK_DURATION_SEC = 180;   // 3 minutes
-    private readonly SYMBOL = 'ETHUSDT';        // Hardcoded for MVP
 
-    // In-memory grid storage
-    private slices: TimeSlice[] = [];
+    // 配置参数
+    private readonly CONFIG = {
+        COLS: 6,                 // 返回给前端的列数
+        ROWS: 6,                 // 6 行
+        INTERVAL_SEC: 5,         // 每列间隔 5 秒
+        LOCK_TIME_SEC: 30,       // 新列从生成到Lock线的时间 (与前端一致)
+        LOCKED_COLS: 1,          // 最后 1 列锁定 (不可下注)
+        HISTORY_COLS: 10,        // 内存中保留的历史列数 (用于下单验证)
+        SYMBOL: 'ETHUSDT',
+        REDIS_KEY: 'market:grid:ETHUSDT',
+        REDIS_HISTORY_KEY: 'market:grid:history:ETHUSDT',
+    };
+
+    private redis: Redis | null = null;
+    private redisAvailable = false;
+
+    // 内存存储 (Redis 不可用时使用)
+    private inMemoryGrid: StoredGrid | null = null;
+
+    // 已结算记录缓存 (settlementTime -> { price, winningRow })
+    private settledResults: Map<number, { price: string; winningRow: number }> = new Map();
 
     constructor(
+        private readonly configService: ConfigService,
         private readonly priceStoreService: PriceStoreService,
         private readonly oddsCalculatorService: OddsCalculatorService,
     ) { }
 
     onModuleInit() {
-        this.initializeGrid();
+        this.initializeRedis();
+        this.logger.log('BlockManagerService initialized (6×6 grid mode with history)');
     }
 
-    private initializeGrid() {
-        // Wait for price to be available?
-        // If no price, we can't generate grid.
-        // We will try to generate in the first tick if empty.
-        this.logger.log('BlockManager initialized. Waiting for price data...');
+    private initializeRedis() {
+        const redisHost = this.configService.get<string>('REDIS_HOST');
+        const redisPort = this.configService.get<number>('REDIS_PORT', 6379);
+
+        if (redisHost) {
+            try {
+                this.redis = new Redis({
+                    host: redisHost,
+                    port: redisPort,
+                    maxRetriesPerRequest: 3,
+                    retryStrategy: (times) => {
+                        if (times > 3) {
+                            this.logger.warn('Redis connection failed, using in-memory storage');
+                            this.redisAvailable = false;
+                            return null; // 停止重试
+                        }
+                        return Math.min(times * 100, 1000);
+                    },
+                    lazyConnect: true,
+                });
+
+                this.redis.connect()
+                    .then(() => {
+                        this.redisAvailable = true;
+                        this.logger.log(`Redis connected for BlockManager: ${redisHost}:${redisPort}`);
+                    })
+                    .catch((err) => {
+                        this.logger.warn(`Redis connection failed: ${err.message}, using in-memory storage`);
+                        this.redisAvailable = false;
+                        this.redis = null;
+                    });
+            } catch (err) {
+                this.logger.warn('Redis initialization failed, using in-memory storage');
+                this.redisAvailable = false;
+                this.redis = null;
+            }
+        } else {
+            this.logger.warn('Redis not configured, using in-memory storage');
+        }
     }
 
     /**
-     * Core Loop: Runs every second
+     * 列的完整生命周期 (从创建到结算):
+     *   LOCK_TIME_SEC + LOCKED_COLS * INTERVAL_SEC = 30 + 5 = 35 秒
      */
-    @Cron('* * * * * *')
-    async tick() {
-        const priceData = this.priceStoreService.getCurrentPrice(this.SYMBOL);
-        if (!priceData) {
-            // this.logger.debug('No price data yet, skipping tick');
-            return;
-        }
-
-        const currentPrice = parseFloat(priceData.price);
-        const now = Date.now();
-        // Align "now" to the next second boundary for generation
-        // But for "current time", use actual now.
-
-        // 1. Remove expired slices (keep settled ones briefly for API, but remove very old)
-        // Let's say we keep them for 10 seconds after settlement for frontend to catch up
-        this.slices = this.slices.filter(s => s.settlementTime > now - 10000);
-
-        // 2. Ensure we have enough slices (Fill the future)
-        this.fillTimeSlices(currentPrice);
-
-        // 3. Update Odds & status for active slices
-        this.updateSlices(currentPrice, now);
+    private get columnLifetimeMs(): number {
+        return (this.CONFIG.LOCK_TIME_SEC + this.CONFIG.LOCKED_COLS * this.CONFIG.INTERVAL_SEC) * 1000;
     }
 
-    private fillTimeSlices(currentPrice: number) {
-        // Determine the start time for new slices
-        // If empty, start from next second.
-        // If not, continue from last slice.
-
+    /**
+     * 获取 6×6 网格 (主入口)
+     * 1. 从存储获取或创建网格
+     * 2. 检查是否需要滑动 (每 INTERVAL_SEC 生成新列)
+     * 3. 实时计算动态赔率
+     */
+    async getColumnGrid(): Promise<ColumnGridResponseDto> {
         const now = Date.now();
-        const nextSecond = Math.floor(now / 1000) * 1000 + 1000;
+        const intervalMs = this.CONFIG.INTERVAL_SEC * 1000;
+        const priceData = this.priceStoreService.getCurrentPrice(this.CONFIG.SYMBOL);
+        const currentPrice = parseFloat(priceData?.price || '0');
 
-        let startTime: number;
-        if (this.slices.length === 0) {
-            startTime = nextSecond;
+        // 1. 获取或创建网格结构
+        let storedGrid = await this.getStoredGrid();
+        let updated = false;
+
+        if (!storedGrid) {
+            storedGrid = this.generateFullGrid(currentPrice, now);
+            await this.saveStoredGrid(storedGrid);
+            updated = true;
+            this.logger.log('Generated new 6×6 grid');
         } else {
-            const lastSlice = this.slices[this.slices.length - 1];
-            startTime = lastSlice.settlementTime + 1000;
+            // 每 INTERVAL_SEC 生成一列，可能需要追赶多列
+            // 判断依据：最新列的 "创建时间" 距今是否超过 INTERVAL_SEC
+            let slideCount = 0;
+            const maxSlides = 20; // 防止无限循环
+
+            while (slideCount < maxSlides) {
+                const lastCol = storedGrid.columns[storedGrid.columns.length - 1];
+                const lastCreatedAt = lastCol.expiryTime - this.columnLifetimeMs;
+                const timeSinceLastCreated = now - lastCreatedAt;
+
+                if (timeSinceLastCreated < intervalMs) break;
+
+                storedGrid = this.slideGrid(storedGrid, currentPrice, now);
+                slideCount++;
+            }
+
+            if (slideCount > 0) {
+                updated = true;
+                await this.saveStoredGrid(storedGrid);
+                this.logger.debug(`Grid slid: added ${slideCount} new column(s)`);
+            }
         }
 
-        const targetTime = now + (this.WINDOW_DURATION_SEC * 1000);
-
-        // Limit generation to avoid infinite loops if something is wrong
-        let count = 0;
-        while (startTime <= targetTime && count < 360) {
-            const newSlice = this.generateSlice(startTime, currentPrice);
-            this.slices.push(newSlice);
-            startTime += 1000;
-            count++;
-        }
+        // 2. 构建响应 (只返回最后 6 列，实时计算赔率)
+        return this.buildResponse(storedGrid, currentPrice, now, updated);
     }
 
-    private generateSlice(settlementTime: number, basisPrice: number): TimeSlice {
+    /**
+     * 生成完整网格 (包含历史列)
+     *
+     * 最新列 (col6) 的 expiryTime = now + columnLifetimeMs
+     * 每列间隔 INTERVAL_SEC，越旧的列 expiryTime 越早
+     */
+    private generateFullGrid(basisPrice: number, now: number): StoredGrid {
+        const intervalMs = this.CONFIG.INTERVAL_SEC * 1000;
+        const totalCols = this.CONFIG.COLS + this.CONFIG.HISTORY_COLS; // 16 列
+
+        // 最新列 (index = totalCols-1) 的 expiryTime
+        const newestExpiry = now + this.columnLifetimeMs;
+
+        const columns: GridColumn[] = [];
+        for (let col = 0; col < totalCols; col++) {
+            // 从最新列往回推算
+            const reverseIdx = totalCols - 1 - col;
+            const expiryTime = newestExpiry - reverseIdx * intervalMs;
+
+            columns.push({
+                expiryTime,
+                basisPrice: basisPrice.toString(),
+                rows: [],
+            });
+        }
+
         return {
-            id: `${this.SYMBOL}:${settlementTime}`,
-            symbol: this.SYMBOL,
-            settlementTime,
-            basisPrice: basisPrice.toString(),
-            locked: false,
-            status: 'pending',
-            ticks: this.generateTicks(basisPrice, 0) // Initial odds for 6 mins out (max time)
+            symbol: this.CONFIG.SYMBOL,
+            createdAt: now,
+            columns,
         };
     }
 
-    private generateTicks(basisPrice: number, timeToSettleMs: number): TickOdds[] {
-        const ticks: TickOdds[] = [];
-        const tickSizePercent = 0.5; // 0.5%
+    /**
+     * 滑动网格: 移除最旧列，添加新列
+     *
+     * 关键：新列的 expiryTime 必须保证有足够的生命周期
+     * - 如果按上一列 +intervalMs 计算后已经太接近过期，则基于 now 重新计算
+     */
+    private slideGrid(grid: StoredGrid, basisPrice: number, now: number): StoredGrid {
+        const intervalMs = this.CONFIG.INTERVAL_SEC * 1000;
+        const maxCols = this.CONFIG.COLS + this.CONFIG.HISTORY_COLS;
 
-        // Generate +/- 20 ticks
-        for (let i = -20; i <= 20; i++) {
-            // Calculate range
-            const lower = basisPrice * (1 + (i - 0.5) * tickSizePercent / 100);
-            const upper = basisPrice * (1 + (i + 0.5) * tickSizePercent / 100);
+        const lastCol = grid.columns[grid.columns.length - 1];
+        let newExpiryTime = lastCol.expiryTime + intervalMs;
 
-            // Calculate odds
-            // If locked (checked outside), will be 0.
-            // Here we just calc dynamic odds.
-            const odds = this.oddsCalculatorService.calculateOdds(i, timeToSettleMs);
-
-            ticks.push({
-                priceTick: i,
-                priceRange: {
-                    lower: lower.toFixed(2),
-                    upper: upper.toFixed(2),
-                },
-                odds: odds
-            });
+        // 如果新列的剩余生命周期不足，基于当前时间重新计算
+        // 新列应该有完整的 columnLifetimeMs 生命周期
+        const minExpiryTime = now + this.columnLifetimeMs;
+        if (newExpiryTime < minExpiryTime) {
+            newExpiryTime = minExpiryTime;
+            this.logger.debug(`Adjusted new column expiryTime to prevent early expiry`);
         }
-        return ticks;
+
+        grid.columns.push({
+            expiryTime: newExpiryTime,
+            basisPrice: basisPrice.toString(),
+            rows: [],
+        });
+
+        while (grid.columns.length > maxCols) {
+            const removed = grid.columns.shift();
+            if (removed) {
+                this.archiveColumn(removed);
+            }
+        }
+
+        return grid;
     }
 
-    private updateSlices(currentPrice: number, now: number) {
-        for (const slice of this.slices) {
-            if (slice.status === 'settled') continue;
+    /**
+     * 归档已滑出的列 (存入单独的 Redis key)
+     */
+    private async archiveColumn(column: GridColumn): Promise<void> {
+        if (!this.redis) return;
 
-            const timeToSettle = slice.settlementTime - now;
+        const key = `market:column:${this.CONFIG.SYMBOL}:${column.expiryTime}`;
+        await this.redis.set(key, JSON.stringify(column), 'EX', 300); // 保留 5 分钟
+        this.logger.debug(`Archived column: ${column.expiryTime}`);
+    }
 
-            // Lock logic
-            if (timeToSettle <= this.LOCK_DURATION_SEC * 1000) {
-                if (!slice.locked) {
-                    slice.locked = true;
-                    // Freeze odds? 
-                    // Yes, odds should be set to 0 or "frozen value".
-                    // Impl plan says: "odds=0 means unbettable".
-                    // But for display, maybe we want to show the LOCKED odds?
-                    // Usually we set odds=0 to prevent betting, but frontend might want to see what it *was*.
-                    // Let's set to 0 for strictness or handle in frontend.
-                    // Following existing doc: "Odd=0 means unbettable" or "Locked".
-                    // Let's keep the odds as is for reference, but betting service will reject.
-                    // Actually, if we update odds based on current price, they will drift even after lock if we don't stop updating.
-                    // So we MUST STOP updating odds if locked.
+    /**
+     * 获取指定 tickId 的列数据 (用于下单验证)
+     */
+    async getColumnByTickId(tickId: string): Promise<LockedBetData | null> {
+        const [expiryTimeStr, rowIndexStr] = tickId.split('_');
+        const expiryTime = parseInt(expiryTimeStr);
+        const rowIndex = parseInt(rowIndexStr);
+
+        if (isNaN(expiryTime) || isNaN(rowIndex) || rowIndex < 1 || rowIndex > this.CONFIG.ROWS) {
+            return null;
+        }
+
+        // 先从当前网格查找
+        const grid = await this.getStoredGrid();
+        if (grid) {
+            const column = grid.columns.find(c => c.expiryTime === expiryTime);
+            if (column) {
+                return this.buildLockedBetData(column, rowIndex, expiryTime);
+            }
+        }
+
+        // 从归档的列查找
+        if (this.redis) {
+            const key = `market:column:${this.CONFIG.SYMBOL}:${expiryTime}`;
+            const data = await this.redis.get(key);
+            if (data) {
+                const column: GridColumn = JSON.parse(data);
+                return this.buildLockedBetData(column, rowIndex, expiryTime);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 构建下单锁定数据
+     */
+    private buildLockedBetData(column: GridColumn, rowIndex: number, expiryTime: number): LockedBetData {
+        const zone = PRICE_ZONES[rowIndex - 1];
+        const basisPrice = parseFloat(column.basisPrice);
+        const now = Date.now();
+        const timeToSettleSec = Math.max(0, (expiryTime - now) / 1000);
+        const odds = this.calculateDynamicOdds(rowIndex - 1, timeToSettleSec);
+
+        return {
+            tickId: `${expiryTime}_${rowIndex}`,
+            expiryTime,
+            rowIndex,
+            basisPrice: column.basisPrice,
+            odds: odds.toFixed(2),
+            priceRange: {
+                min: zone.percentMin <= -100 ? null : basisPrice * (1 + zone.percentMin / 100),
+                max: zone.percentMax >= 100 ? null : basisPrice * (1 + zone.percentMax / 100),
+                percentMin: zone.percentMin,
+                percentMax: zone.percentMax,
+            },
+            lockedAt: now,
+        };
+    }
+
+    /**
+     * 验证下注请求
+     * @returns null 如果验证通过，否则返回错误信息
+     */
+    async validateBet(tickId: string): Promise<{ error: string | null; data: LockedBetData | null }> {
+        const lockedData = await this.getColumnByTickId(tickId);
+
+        if (!lockedData) {
+            return { error: '无效的 tickId: 区块不存在或已过期', data: null };
+        }
+
+        const now = Date.now();
+
+        // 检查是否还可以下注 (未到期)
+        if (lockedData.expiryTime <= now) {
+            return { error: '该区块已到期，无法下注', data: null };
+        }
+
+        // 检查是否在锁定期内
+        const timeToSettle = (lockedData.expiryTime - now) / 1000;
+        if (timeToSettle <= this.CONFIG.LOCKED_COLS * this.CONFIG.INTERVAL_SEC) {
+            return { error: '该区块已锁定，无法下注', data: null };
+        }
+
+        return { error: null, data: lockedData };
+    }
+
+    /**
+     * 构建 API 响应 (只返回最后 6 列)
+     */
+    private buildResponse(
+        grid: StoredGrid,
+        currentPrice: number,
+        now: number,
+        updated: boolean
+    ): ColumnGridResponseDto {
+        // 计算 Lock 时间和最新列的 expiryTime
+        const lockTimeSec = this.CONFIG.LOCKED_COLS * this.CONFIG.INTERVAL_SEC;
+        const latestCol = grid.columns[grid.columns.length - 1];
+        const latestExpiryTime = latestCol?.expiryTime ?? 0;
+
+        const response: ColumnGridResponseDto = {
+            symbol: grid.symbol,
+            currentPrice: currentPrice.toString(),
+            currentTime: now,
+            intervalSec: this.CONFIG.INTERVAL_SEC,
+            lockTimeSec,
+            latestExpiryTime,
+            col1: [],
+            col2: [],
+            col3: [],
+            col4: [],
+            col5: [],
+            col6: [],
+            update: updated,
+        };
+
+        const colKeys = ['col1', 'col2', 'col3', 'col4', 'col5', 'col6'] as const;
+
+        // 只取最后 6 列返回给前端
+        const displayStartIdx = Math.max(0, grid.columns.length - this.CONFIG.COLS);
+
+        for (let i = 0; i < this.CONFIG.COLS; i++) {
+            const colIdx = displayStartIdx + i;
+            const column = grid.columns[colIdx];
+
+            if (!column) continue;
+
+            const cells: GridCell[] = [];
+            const isSettled = column.expiryTime <= now;
+            const timeToSettleSec = Math.max(0, (column.expiryTime - now) / 1000);
+
+            // 锁定判定: 距离结算时间 <= LOCKED_COLS * INTERVAL_SEC
+            const isLocked = timeToSettleSec <= this.CONFIG.LOCKED_COLS * this.CONFIG.INTERVAL_SEC;
+            const basisPrice = parseFloat(column.basisPrice);
+
+            // 获取结算结果 (如果有)
+            const settledResult = this.settledResults.get(column.expiryTime);
+
+            for (let rowIdx = 0; rowIdx < this.CONFIG.ROWS; rowIdx++) {
+                const zone = PRICE_ZONES[rowIdx];
+
+                // 计算价格区间 (基于当前价格)
+                const priceRange: PriceRange = {
+                    min: zone.percentMin <= -100 ? null : currentPrice * (1 + zone.percentMin / 100),
+                    max: zone.percentMax >= 100 ? null : currentPrice * (1 + zone.percentMax / 100),
+                    label: zone.label,
+                    percentMin: zone.percentMin,
+                    percentMax: zone.percentMax,
+                };
+
+                // 计算动态赔率
+                const odds = this.calculateDynamicOdds(rowIdx, timeToSettleSec);
+
+                // 确定状态
+                let status: GridCell['status'];
+                if (isSettled) {
+                    status = 'settled';
+                } else if (isLocked) {
+                    status = 'locked';
+                } else {
+                    status = 'betting';
                 }
+
+                const cell: GridCell = {
+                    odds: odds.toFixed(2),
+                    expiryTime: column.expiryTime,
+                    priceRange,
+                    tickId: `${column.expiryTime}_${rowIdx + 1}`,
+                    status,
+                    basisPrice: column.basisPrice,
+                };
+
+                // 已结算的格子添加结果
+                if (isSettled && settledResult) {
+                    cell.isWinning = settledResult.winningRow === rowIdx;
+                    cell.settlementPrice = settledResult.price;
+                }
+
+                cells.push(cell);
             }
 
-            // Update odds if NOT locked
-            if (!slice.locked) {
-                // Dynamic update based on NEW current price vs this slice's basis
-                // Wait, basisPrice is fixed at creation? 
-                // If basisPrice is fixed, then PriceTick 0 is always basisPrice.
-                // But Current Price moves.
-                // So "Distance" changes.
-                // Wait, is the grid "fixed" (Tick 0 is fixed price) or "floating"?
-                // Design doc 2.2: "3分钟外：动态计算赔率 ... slice.basePrice = currentPrice;"
-                // AH! The basis price UPDATES until it locks.
-                // This means the grid row definitions (price ranges) SHIFT with market price until lock.
-                // Once locked, the grid (price ranges) is FIXED.
+            response[colKeys[i]] = cells;
+        }
 
-                slice.basisPrice = currentPrice.toString();
-                // Re-generate ticks with new basis and time
-                slice.ticks = this.generateTicks(currentPrice, timeToSettle);
-            } else {
-                // Locked: ticks are frozen. Do not update.
-                // Just mark them as unbettable? 
-                // We can set a flag or just rely on slice.locked.
+        return response;
+    }
+
+    /**
+     * 计算动态赔率
+     */
+    private calculateDynamicOdds(rowIdx: number, timeToSettleSec: number): number {
+        const baseOdds = BASE_ODDS[rowIdx];
+
+        // 时间因子: 越远离结算赔率越高 (最多 +50%)
+        const maxTimeSec = this.columnLifetimeMs / 1000; // 35 秒
+        const timeFactor = 1 + (Math.min(timeToSettleSec, maxTimeSec) / maxTimeSec) * 0.5;
+
+        const odds = baseOdds * timeFactor;
+
+        // 限制范围 [1.1, 10.0]
+        return Math.round(Math.max(1.1, Math.min(10.0, odds)) * 100) / 100;
+    }
+
+    /**
+     * 根据价格变化判断中奖行
+     */
+    getWinningRow(priceChangePercent: number): number {
+        if (priceChangePercent >= 2.0) return 0;
+        if (priceChangePercent >= 1.0) return 1;
+        if (priceChangePercent >= 0) return 2;
+        if (priceChangePercent >= -1.0) return 3;
+        if (priceChangePercent >= -2.0) return 4;
+        return 5;
+    }
+
+    /**
+     * 记录结算结果 (由 SettlementService 调用)
+     */
+    recordSettlement(expiryTime: number, settlementPrice: string, basisPrice: string) {
+        const priceChange = (parseFloat(settlementPrice) - parseFloat(basisPrice)) / parseFloat(basisPrice) * 100;
+        const winningRow = this.getWinningRow(priceChange);
+
+        this.settledResults.set(expiryTime, {
+            price: settlementPrice,
+            winningRow,
+        });
+
+        // 清理太旧的记录 (保留最近 100 个)
+        if (this.settledResults.size > 100) {
+            const oldest = Math.min(...this.settledResults.keys());
+            this.settledResults.delete(oldest);
+        }
+
+        this.logger.debug(`Settlement recorded: ${expiryTime} -> row ${winningRow} (${priceChange.toFixed(2)}%)`);
+    }
+
+    // ============ Redis 操作 (带内存回退) ============
+
+    private async getStoredGrid(): Promise<StoredGrid | null> {
+        // 优先使用 Redis
+        if (this.redis && this.redisAvailable) {
+            try {
+                const data = await this.redis.get(this.CONFIG.REDIS_KEY);
+                return data ? JSON.parse(data) : null;
+            } catch (err) {
+                this.logger.warn('Redis read failed, using in-memory storage');
+                this.redisAvailable = false;
+            }
+        }
+        // 回退到内存存储
+        return this.inMemoryGrid;
+    }
+
+    private async saveStoredGrid(grid: StoredGrid): Promise<void> {
+        // 始终保存到内存
+        this.inMemoryGrid = grid;
+
+        // 尝试保存到 Redis
+        if (this.redis && this.redisAvailable) {
+            try {
+                await this.redis.set(this.CONFIG.REDIS_KEY, JSON.stringify(grid));
+            } catch (err) {
+                this.logger.warn('Redis write failed, using in-memory only');
+                this.redisAvailable = false;
             }
         }
     }
 
-    public getGrid() {
-        // Return public view
-        return this.slices;
+    // ============ 旧接口兼容 ============
+
+    /** @deprecated */
+    getGrid(): TimeSlice[] {
+        return [];
     }
 
-    public getSlice(settlementTime: number): TimeSlice | undefined {
-        return this.slices.find(s => s.settlementTime === settlementTime);
+    getSlice(settlementTime: number): TimeSlice | undefined {
+        return undefined;
     }
 
-    public markSettled(settlementTime: number) {
-        const slice = this.getSlice(settlementTime);
-        if (slice) {
-            slice.status = 'settled';
-        }
+    markSettled(settlementTime: number) {
+        this.logger.debug(`markSettled called for ${settlementTime}`);
     }
 }

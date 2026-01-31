@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { BetCell, BetType } from '../types';
-import { BackendTick } from '../data/mockBetTicks';
+import { BackendTick } from './useBetTicks';
 import { CANDLES_PER_GRID } from '../utils/chartConfig';
 
 interface UseBettingGridOptions {
@@ -17,17 +17,19 @@ export function useBettingGrid({
   newColumn = null,
 }: UseBettingGridOptions) {
   const [bettingCells, setBettingCells] = useState<BetCell[]>([]);
-  const knownColumnsRef = useRef<Set<string>>(new Set());
+  // 使用 expiryTime 去重 (后端每列有唯一的 expiryTime)
+  const knownExpiryTimesRef = useRef<Set<number>>(new Set());
   // 递增的列索引，确保每次新增的列位置连续
   const nextColRef = useRef<number>(-1);
 
   useEffect(() => {
     if (!newColumn || newColumn.length === 0) return;
 
-    const colTickId = newColumn[0]?.tickId ?? '';
-    if (!colTickId || knownColumnsRef.current.has(colTickId)) return;
+    // 使用 expiryTime 去重
+    const expiryTime = newColumn[0]?.expiryTime;
+    if (!expiryTime || knownExpiryTimesRef.current.has(expiryTime)) return;
 
-    knownColumnsRef.current.add(colTickId);
+    knownExpiryTimesRef.current.add(expiryTime);
 
     // 计算当前视口右边缘位置
     const scrolledCols = updateCount / CANDLES_PER_GRID;
@@ -48,13 +50,16 @@ export function useBettingGrid({
 
     const newCells: BetCell[] = newColumn.map((tick, rowIndex) => {
       const betType: BetType = rowIndex < halfVisible ? 'high' : 'low';
+      // 映射后端状态到前端状态
+      const status = tick.status === 'settled' ? 'dissolved' : 'default';
+
       return {
         id: `${rowIndex}-${colIndex}`,
         row: rowIndex,
         col: colIndex,
         label: tick.priceRange.label,
         odds: parseFloat(tick.odds),
-        status: tick.status === 'settled' ? 'dissolved' : 'default',
+        status,
         betType,
         tickId: tick.tickId,
         expiryTime: tick.expiryTime,
