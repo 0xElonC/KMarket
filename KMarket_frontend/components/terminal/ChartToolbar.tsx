@@ -21,7 +21,7 @@ interface ChartToolbarProps {
   onDemoModeChange?: (isDemoMode: boolean) => void;
 }
 
-export function ChartToolbar({
+const ChartToolbar = React.memo(function ChartToolbar({
   activeSymbol,
   lastClose,
   isForex,
@@ -133,4 +133,6 @@ export function ChartToolbar({
       </div>
     </div>
   );
-}
+});
+
+export { ChartToolbar };

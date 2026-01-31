@@ -7,6 +7,9 @@ import { UsersService } from '../../users/users.service';
 import { BlockManagerService } from '../../market/services/block-manager.service';
 import { TransactionType } from '../../users/entities/transaction.entity';
 
+// 价格区间标签
+const ROW_LABELS = ['+2%↑', '+1%~+2%', '0~+1%', '-1%~0', '-2%~-1%', '-2%↓'];
+
 @Injectable()
 export class BetService {
     private readonly logger = new Logger(BetService.name);
@@ -18,71 +21,58 @@ export class BetService {
         private readonly blockManagerService: BlockManagerService,
     ) { }
 
+    /**
+     * 下注
+     */
     async placeBet(userId: number, dto: CreateBetDto): Promise<BetResponseDto> {
-        // 1. 获取时间片
-        const slice = this.blockManagerService.getSlice(dto.settlementTime);
-        if (!slice) {
-            throw new BadRequestException('无效的结算时间');
-        }
-        if (slice.locked) {
-            throw new BadRequestException('区块已锁定，不可下注');
-        }
-        if (slice.status === 'settled') {
-            throw new BadRequestException('区块已结算');
+        // 1. 用 tickId 从 Redis 获取区块数据
+        const columnData = await this.blockManagerService.getColumnByTickId(dto.tickId);
+
+        // 取不到 或 已过期 统一提示
+        if (!columnData || columnData.expiryTime <= Date.now()) {
+            throw new BadRequestException('区块已过期');
         }
 
-        // 2. 获取 Tick 信息
-        const tick = slice.ticks.find(t => t.priceTick === dto.priceTick);
-        if (!tick) {
-            throw new BadRequestException('无效的价格区间');
-        }
-        if (tick.odds <= 1.0) {
-            throw new BadRequestException('赔率不可用');
+        // 检查是否在锁定期 (距离结算 <= 6s)
+        const timeToSettle = (columnData.expiryTime - Date.now()) / 1000;
+        if (timeToSettle <= 6) { // LOCKED_COLS * INTERVAL_SEC
+            throw new BadRequestException('区块已锁定，无法下注');
         }
 
-        const odds = tick.odds;
-
-        // 3. 扣减余额
+        // 2. 扣减余额
         await this.usersService.deductBalance(userId, dto.amount, {
             type: TransactionType.BET,
             refType: 'bet',
-            remark: `Bet on ${dto.symbol} Tick ${dto.priceTick}`,
+            remark: `Bet on ${dto.symbol} ${ROW_LABELS[columnData.rowIndex - 1] || ''}`,
         });
 
-        // 4. 创建订单
+        // 3. 创建订单 (使用从 Redis 读取的数据)
         const bet = this.betRepository.create({
             userId,
             symbol: dto.symbol,
+            tickId: dto.tickId,
+            rowIndex: columnData.rowIndex,
             amount: dto.amount,
-            priceTick: dto.priceTick,
-            tickLower: tick.priceRange.lower,
-            tickUpper: tick.priceRange.upper,
-            basePrice: slice.basisPrice,
-            odds: odds.toFixed(4),
-            settlementTime: new Date(dto.settlementTime),
+            priceRangeMin: columnData.priceRange.min?.toString() || null,
+            priceRangeMax: columnData.priceRange.max?.toString() || null,
+            basisPrice: columnData.basisPrice,
+            odds: columnData.odds,
+            settlementTime: new Date(columnData.expiryTime),
             status: BetStatus.ACTIVE,
         });
 
         const savedBet = await this.betRepository.save(bet);
 
         this.logger.log(
-            `Bet #${savedBet.id} created: User ${userId} bet ${dto.amount} on ${dto.symbol} Tick ${dto.priceTick} @ ${odds}x`,
+            `Bet #${savedBet.id} created: User ${userId} bet ${dto.amount} on ${dto.symbol} [${ROW_LABELS[columnData.rowIndex - 1]}] @ ${columnData.odds}x`,
         );
 
-        return {
-            id: savedBet.id,
-            symbol: savedBet.symbol,
-            amount: savedBet.amount,
-            priceTick: savedBet.priceTick,
-            priceRange: { lower: savedBet.tickLower, upper: savedBet.tickUpper },
-            basePrice: savedBet.basePrice,
-            odds: savedBet.odds,
-            settlementTime: savedBet.settlementTime,
-            status: savedBet.status,
-            createdAt: savedBet.createdAt,
-        };
+        return this.toBetResponseDto(savedBet);
     }
 
+    /**
+     * 获取用户持仓
+     */
     async getActiveBets(userId: number, symbol?: string): Promise<PositionsResponseDto> {
         const whereClause: any = {
             userId,
@@ -108,9 +98,13 @@ export class BetService {
             return {
                 id: bet.id,
                 symbol: bet.symbol,
+                tickId: bet.tickId,
+                rowIndex: bet.rowIndex,
                 amount: bet.amount,
-                priceTick: bet.priceTick,
-                priceRange: { lower: bet.tickLower, upper: bet.tickUpper },
+                priceRange: {
+                    min: bet.priceRangeMin,
+                    max: bet.priceRangeMax,
+                },
                 odds: bet.odds,
                 settlementTime: bet.settlementTime,
                 remainingSeconds,
@@ -124,6 +118,9 @@ export class BetService {
         };
     }
 
+    /**
+     * 获取下注历史
+     */
     async getBetHistory(
         userId: number,
         page: number = 1,
@@ -138,7 +135,7 @@ export class BetService {
             skip,
         });
 
-        // 计算 summary 统计
+        // 计算统计
         const allBets = await this.betRepository.find({ where: { userId } });
         let totalWagered = 0n;
         let totalPayout = 0n;
@@ -165,18 +162,7 @@ export class BetService {
             netProfit: netProfit.toString(),
         };
 
-        const responseItems: BetResponseDto[] = items.map(bet => ({
-            id: bet.id,
-            symbol: bet.symbol,
-            amount: bet.amount,
-            priceTick: bet.priceTick,
-            priceRange: { lower: bet.tickLower, upper: bet.tickUpper },
-            basePrice: bet.basePrice,
-            odds: bet.odds,
-            settlementTime: bet.settlementTime,
-            status: bet.status,
-            createdAt: bet.createdAt,
-        }));
+        const responseItems: BetResponseDto[] = items.map(bet => this.toBetResponseDto(bet));
 
         return {
             items: responseItems,
@@ -187,6 +173,9 @@ export class BetService {
         };
     }
 
+    /**
+     * 获取已过期待结算的注单
+     */
     async getExpiredBets(targetDate?: Date): Promise<Bet[]> {
         const date = targetDate || new Date();
         return this.betRepository
@@ -194,5 +183,28 @@ export class BetService {
             .where('bet.status = :status', { status: BetStatus.ACTIVE })
             .andWhere('bet.settlementTime <= :now', { now: date })
             .getMany();
+    }
+
+    /**
+     * 转换为响应 DTO
+     */
+    private toBetResponseDto(bet: Bet): BetResponseDto {
+        return {
+            id: bet.id,
+            symbol: bet.symbol,
+            tickId: bet.tickId,
+            rowIndex: bet.rowIndex,
+            amount: bet.amount,
+            priceRange: {
+                min: bet.priceRangeMin,
+                max: bet.priceRangeMax,
+                label: ROW_LABELS[bet.rowIndex - 1],
+            },
+            basisPrice: bet.basisPrice,
+            odds: bet.odds,
+            settlementTime: bet.settlementTime,
+            status: bet.status,
+            createdAt: bet.createdAt,
+        };
     }
 }

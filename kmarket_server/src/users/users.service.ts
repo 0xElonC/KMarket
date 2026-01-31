@@ -63,14 +63,17 @@ export class UsersService {
         let user = await this.findByAddress(normalizedAddress);
 
         if (!user) {
+            // 新用户默认赠送 1000 余额 (测试用)
+            const defaultBalance = '1000000000000000000000'; // 1000 * 10^18 (Wei)
+
             user = this.userRepository.create({
                 address: normalizedAddress,
-                balance: '0',
+                balance: defaultBalance,
                 claimable: '0',
-                frozenBalance: '0', // 废弃字段，保留兼容
+                frozenBalance: '0',
             });
             user = await this.userRepository.save(user);
-            this.logger.log(`Created new user: ${normalizedAddress}`);
+            this.logger.log(`Created new user: ${normalizedAddress} with default balance 1000`);
         }
 
         return user;

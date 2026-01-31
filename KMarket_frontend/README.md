@@ -86,5 +86,18 @@ wss://stream.binance.com:9443/ws/ethusdt@kline_1m
 - `translations.ts` — 中英文文案
 - `index.css` / `index.html` — 全局样式与 Tailwind 配置
 
+## 维护性拆分记录（不改 UI）
+- `pages/Terminal.tsx` 的状态与数据生成已迁出到 `hooks/useTerminalState.ts`。
+- `components/PredictionChart.tsx` 的图表交互与绘制逻辑已迁出到：
+  - `components/prediction/useChartPan.ts`
+  - `components/prediction/useCandleCanvas.ts`
+
+## 近期维护/性能说明（不改 UI）
+- **页面切换**：`App.tsx` 使用 `startTransition` 更新 `activePage`，并用 `navPage` 让 Header 选中态即时反馈，避免切换瞬间抖动。
+- **Terminal 预加载**：`pages/Terminal` 采用 `React.lazy`，Header hover 时触发 `onPrefetchPage` 预加载，减轻首次进入卡顿。
+- **图表绘制节流**：K 线绘制在 `useCandleCanvas` 内部通过 `requestAnimationFrame` 统一渲染，减少同步阻塞。
+- **交易记录**：`TransactionHistorySection` 将筛选项与数据列表 `useMemo`，避免重复构建导致的无谓渲染。
+- **组件稳定性**：`ChartToolbar` / `HistoryPanel` 已 `React.memo`，后续新增 props 时注意传入稳定引用（如 `useMemo` / `useCallback`）。
+
 ## 备注
 - `.env.local` 当前不影响前端功能，可忽略。

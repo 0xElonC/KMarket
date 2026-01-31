@@ -2,7 +2,7 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { PriceStoreService, KLineData, PriceData } from './services/price-store.service';
 import { BlockManagerService } from './services/block-manager.service';
 import { ApiResponse } from '../common/dto';
-import { GridResponseDto } from './dto/grid.dto';
+import { ColumnGridResponseDto, GridResponseDto } from './dto/grid.dto';
 
 @Controller('market')
 export class MarketController {
@@ -23,9 +23,6 @@ export class MarketController {
         @Query('startTime') startTime?: string,
         @Query('endTime') endTime?: string,
     ): Promise<ApiResponse<KLineData[]>> {
-        // Simple implementation for now.
-        // If we need chart, we might need a dedicated ChartService or use PriceStore.
-        // PriceStore has getKLineHistory (MVP).
         const start = startTime ? parseInt(startTime) : Date.now() - 3600000;
         const end = endTime ? parseInt(endTime) : Date.now();
 
@@ -33,16 +30,15 @@ export class MarketController {
         return ApiResponse.success(klines);
     }
 
+    /**
+     * 获取 6×6 下注网格
+     * - 6 列: 时间维度 (3s 间隔)
+     * - 6 行: 价格区间 (大涨/中涨/小涨/小跌/中跌/大跌)
+     * - 前 2 列锁定，后 4 列可下注
+     */
     @Get('grid')
-    getGrid(@Query('symbol') symbol: string = 'ETHUSDT'): ApiResponse<GridResponseDto> {
-        const slices = this.blockManagerService.getGrid();
-        const price = this.priceStoreService.getCurrentPrice(symbol);
-
-        return ApiResponse.success({
-            symbol,
-            currentPrice: price?.price || '0',
-            currentTime: Date.now(),
-            slices
-        });
+    async getGrid(@Query('symbol') symbol: string = 'ETHUSDT'): Promise<ApiResponse<ColumnGridResponseDto>> {
+        const gridData = await this.blockManagerService.getColumnGrid();
+        return ApiResponse.success(gridData);
     }
 }

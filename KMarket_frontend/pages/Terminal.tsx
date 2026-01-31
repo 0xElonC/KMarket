@@ -13,7 +13,7 @@ import { useBinanceCandles } from '../hooks/useBinanceCandles';
 import {
   cryptoAssets,
   forexAssets,
-  historyItems,
+  historyItems
 } from '../data/terminal';
 
 // K项目风格：中心价格线（结算线）在40%位置
@@ -129,7 +129,6 @@ export default function Terminal({
   // Effect: 自动判定下注结果
   useBetResolution({
     chartData,
-    currentPrice,
     updateCount,
     activeBets,
     setActiveBets,
@@ -146,6 +145,18 @@ export default function Terminal({
     midLow: t.terminal.rangeMidLow,
     low: t.terminal.rangeLow
   };
+
+  const historyLabels = useMemo(
+    () => ({
+      title: t.terminal.history,
+      window: t.terminal.historyWindow,
+      entry: t.terminal.historyEntry,
+      win: t.terminal.historyWin,
+      loss: t.terminal.historyLoss,
+      live: t.terminal.historyLive
+    }),
+    [t]
+  );
 
   // 下注处理 - K项目风格：双击下注
   const handleBet = (cellId: string, amount: number) => {
@@ -191,20 +202,9 @@ export default function Terminal({
 
   return (
     <div className="flex-1 flex flex-col min-h-0 h-full pb-0">
-      <div className="flex-1 neu-out p-1 rounded-3xl relative flex flex-col h-full min-h-0 overflow-hidden outline-none">
+      <div className="flex-1 neu-out terminal-shell p-1 rounded-3xl relative flex flex-col h-full min-h-0 overflow-hidden outline-none">
         <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0 h-full">
-      <HistoryPanel
-        items={historyItems}
-        rangeLabels={rangeLabels}
-        labels={{
-          title: t.terminal.history,
-          window: t.terminal.historyWindow,
-          entry: t.terminal.historyEntry,
-          win: t.terminal.historyWin,
-          loss: t.terminal.historyLoss,
-          live: t.terminal.historyLive
-        }}
-      />
+      <HistoryPanel items={historyItems} rangeLabels={rangeLabels} labels={historyLabels} />
 
       {/* Main Chart Area */}
       <section className="flex-1 flex flex-col gap-4 min-w-0 h-full min-h-0">
@@ -221,7 +221,7 @@ export default function Terminal({
               isDemoMode={isDemoMode}
               onDemoModeChange={setIsDemoMode}
             />
-            
+
             {/* Chart Area with Betting Grid - 统一网格系统 */}
     <div className="flex-1 neu-in relative overflow-hidden rounded-xl border border-white/5 bg-[#10151e] m-1 min-h-0">
                 <PredictionChart
