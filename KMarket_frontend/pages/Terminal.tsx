@@ -103,7 +103,7 @@ export default function Terminal({
   const priceData = isLiveReady ? livePriceData : [];
 
   // 后端下注数据轮询（用于获取新增的列）
-  const { newColumn } = useBetTicks({
+  const { newColumn, lockTimeSec } = useBetTicks({
     enabled: true,
     pollInterval: 1000,
   });
@@ -236,6 +236,7 @@ export default function Terminal({
                     updateCount={updateCount}
                     onPanChange={setPanOffset}
                     onScrollTick={handleScrollTick}
+                    lockTimeSec={lockTimeSec}
                 />
             </div>
       </section>

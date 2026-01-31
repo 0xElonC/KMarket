@@ -72,13 +72,15 @@ export interface ColumnGridResponseDto {
     currentPrice: string;
     currentTime: number;
     intervalSec: number;
+    lockTimeSec: number;         // Lock 时间 (秒)
+    latestExpiryTime: number;    // 最新列的 expiryTime (用于去重)
     col1: GridCell[];
     col2: GridCell[];
     col3: GridCell[];
     col4: GridCell[];
     col5: GridCell[];
     col6: GridCell[];
-    update: boolean;         // 是否有列滑动
+    update: boolean;             // 是否有列滑动
 }
 
 // ============ 以下为旧 DTO，暂时保留兼容 ============

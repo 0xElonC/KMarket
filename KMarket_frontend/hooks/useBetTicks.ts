@@ -1,39 +1,77 @@
-import { useEffect, useState } from 'react';
-import { BackendTick, generateMockResponse } from '../data/mockBetTicks';
+import { useEffect, useState, useRef } from 'react';
+
+// 后端 GridCell 类型 (与 grid.dto.ts 对应)
+export interface BackendTick {
+  tickId: string;
+  odds: string;
+  status: 'betting' | 'locked' | 'settled';
+  expiryTime: number;
+  basisPrice: string;
+  priceRange: {
+    min: number | null;
+    max: number | null;
+    label: string;
+    percentMin: number;
+    percentMax: number;
+  };
+  isWinning?: boolean;
+  settlementPrice?: string;
+}
 
 interface UseBetTicksOptions {
   enabled?: boolean;
   pollInterval?: number;
+  apiBaseUrl?: string;
 }
 
 export function useBetTicks({
   enabled = true,
   pollInterval = 1000,
+  apiBaseUrl = '/api',
 }: UseBetTicksOptions = {}) {
-  // 只保存最新的 col4（新增的列）
   const [newColumn, setNewColumn] = useState<BackendTick[] | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
-  const [intervalSec, setIntervalSec] = useState(3);
+  const [intervalSec, setIntervalSec] = useState(5);
+  const [lockTimeSec, setLockTimeSec] = useState(5);
+
+  const lastExpiryTimeRef = useRef<number>(0);
 
   useEffect(() => {
     if (!enabled) return;
 
-    const poll = () => {
-      const response = generateMockResponse();
+    const poll = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/market/grid?symbol=ETHUSDT`);
+        if (!response.ok) {
+          console.error('Grid API error:', response.status);
+          return;
+        }
 
-      // 只有 update: true 且 col4 存在时才传递新列
-      if (response.data.update && response.data.col4) {
-        setNewColumn(response.data.col4);
+        const json = await response.json();
+
+        if (json.success && json.data) {
+          const data = json.data;
+
+          setCurrentPrice(parseFloat(data.currentPrice));
+          setIntervalSec(data.intervalSec);
+          setLockTimeSec(data.lockTimeSec);
+
+          if (data.update && data.latestExpiryTime !== lastExpiryTimeRef.current) {
+            lastExpiryTimeRef.current = data.latestExpiryTime;
+            if (data.col6 && data.col6.length > 0) {
+              setNewColumn(data.col6);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch grid data:', error);
       }
-
-      setCurrentPrice(parseFloat(response.data.currentPrice));
-      setIntervalSec(response.data.intervalSec);
     };
 
     poll();
     const timer = setInterval(poll, pollInterval);
     return () => clearInterval(timer);
-  }, [pollInterval, enabled]);
+  }, [pollInterval, enabled, apiBaseUrl]);
 
-  return { newColumn, currentPrice, intervalSec };
+  return { newColumn, currentPrice, intervalSec, lockTimeSec };
 }
