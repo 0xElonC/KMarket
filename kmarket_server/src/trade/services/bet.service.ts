@@ -10,6 +10,13 @@ import { TransactionType } from '../../users/entities/transaction.entity';
 // 价格区间标签
 const ROW_LABELS = ['+2%↑', '+1%~+2%', '0~+1%', '-1%~0', '-2%~-1%', '-2%↓'];
 
+// Helper: 将 decimal 字符串安全转为 BigInt (去掉小数部分)
+function toBigInt(value: string): bigint {
+    // 处理类似 "100000000.000000000000000000" 的情况
+    const intPart = value.split('.')[0];
+    return BigInt(intPart);
+}
+
 @Injectable()
 export class BetService {
     private readonly logger = new Logger(BetService.name);
@@ -93,7 +100,7 @@ export class BetService {
         const items: PositionDto[] = bets.map(bet => {
             const remainingMs = bet.settlementTime.getTime() - now;
             const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
-            totalInBets += BigInt(bet.amount);
+            totalInBets += toBigInt(bet.amount);
 
             return {
                 id: bet.id,
@@ -143,9 +150,9 @@ export class BetService {
         let losses = 0;
 
         for (const bet of allBets) {
-            totalWagered += BigInt(bet.amount);
+            totalWagered += toBigInt(bet.amount);
             if (bet.payout) {
-                totalPayout += BigInt(bet.payout);
+                totalPayout += toBigInt(bet.payout);
             }
             if (bet.status === BetStatus.WON) wins++;
             if (bet.status === BetStatus.LOST) losses++;

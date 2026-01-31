@@ -98,11 +98,11 @@ export const authApi = {
   },
 
   // Login with wallet signature
-  login: async (address: string, signature: string, nonce: string): Promise<ApiResponse<LoginResponse>> => {
+  login: async (address: string, signature: string, message: string): Promise<ApiResponse<LoginResponse>> => {
     const response = await api.post<ApiResponse<LoginResponse>>('/users/auth/login', {
       address,
       signature,
-      nonce,
+      message,
     });
     return response.data;
   },

@@ -26,7 +26,7 @@ interface WalletContextValue {
   isLoadingBalances: boolean;
   contractAddresses: ContractAddresses;
   refetchBalances: () => void;
-  
+
   // Auth state
   isAuthenticated: boolean;
   isAuthLoading: boolean;
@@ -141,12 +141,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       }
       const { nonce } = nonceResponse.data;
 
-      // Step 2: Sign the message
-      const message = `Sign this message to login to KMarket:\nNonce: ${nonce}`;
-      const signature = await signMessageAsync({ message });
+      // Step 2: Sign the message (nonce IS the complete message from backend)
+      const message = nonce;
+      const signature = await signMessageAsync({ account: address, message });
 
-      // Step 3: Login with signature
-      const loginResponse = await authApi.login(address, signature, nonce);
+      // Step 3: Login with signature (send message, not nonce)
+      const loginResponse = await authApi.login(address, signature, message);
       if (!loginResponse.success) {
         throw new Error(loginResponse.message || 'Login failed');
       }

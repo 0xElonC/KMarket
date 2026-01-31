@@ -18,15 +18,25 @@ export class AuthService {
     async login(loginDto: LoginDto): Promise<LoginResponseDto> {
         const { message, signature, address } = loginDto;
 
+        this.logger.log(`Login attempt - Address: ${address}`);
+        this.logger.log(`Message: "${message}"`);
+        this.logger.log(`Signature: ${signature}`);
+
         // Verify the signature
         try {
+            this.logger.log('Calling verifyMessage...');
             const recoveredAddress = verifyMessage(message, signature);
+            this.logger.log(`Recovered address: ${recoveredAddress}`);
+            this.logger.log(`Expected address: ${address}`);
 
             if (recoveredAddress.toLowerCase() !== address.toLowerCase()) {
+                this.logger.warn(`Address mismatch: recovered=${recoveredAddress}, expected=${address}`);
                 throw new UnauthorizedException('Invalid signature');
             }
-        } catch (error) {
-            this.logger.error('Signature verification failed', error);
+            this.logger.log('Signature verified successfully!');
+        } catch (error: any) {
+            this.logger.error(`Signature verification failed: ${error.message}`);
+            this.logger.error(`Error details:`, error);
             throw new UnauthorizedException('Invalid signature');
         }
 

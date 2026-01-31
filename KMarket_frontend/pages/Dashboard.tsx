@@ -16,6 +16,7 @@ import { useTransactionActivity } from '../hooks/useTransactionActivity';
 import type { ActivityItem } from '../utils/activityUtils';
 import { ActivityList } from '../components/ActivityList';
 import { WalletCard } from '../components/dashboard/WalletCard';
+import { useQuickStats } from '../hooks/useQuickStats';
 
 
 type DashboardSection = 'overview' | 'portfolio' | 'transactions' | 'analytics' | 'account';
@@ -36,6 +37,7 @@ export default function Dashboard({
   const [performanceRange, setPerformanceRange] = useState<'week' | 'lastMonth'>('week');
   const [isPerformanceMenuOpen, setIsPerformanceMenuOpen] = useState(false);
   const performanceMenuRef = useRef<HTMLDivElement | null>(null);
+  const { activeBets, winRate, loading: statsLoading } = useQuickStats();
 
   // Calculate total balance (wallet + trading)
   const totalBalance = isConnected
@@ -97,6 +99,9 @@ export default function Dashboard({
             proxyAddress={proxyAddress}
             onDeposit={handleOpenDeposit}
             onWithdraw={handleOpenWithdraw}
+            activeBets={activeBets}
+            winRate={winRate}
+            statsLoading={statsLoading}
           />
           <OverviewSidebar
             t={t}
@@ -241,7 +246,10 @@ function OverviewMainSection({
   isCreatingProxy,
   proxyAddress,
   onDeposit,
-  onWithdraw
+  onWithdraw,
+  activeBets,
+  winRate,
+  statsLoading
 }: {
   t: LanguageData;
   totalBalance: string;
@@ -254,6 +262,9 @@ function OverviewMainSection({
   proxyAddress: `0x${string}` | undefined;
   onDeposit: () => void;
   onWithdraw: () => void;
+  activeBets: number;
+  winRate: number;
+  statsLoading: boolean;
 }) {
   return (
     <section className="flex-1 flex flex-col gap-8 min-w-0 pr-2 pb-4">
@@ -325,26 +336,36 @@ function OverviewMainSection({
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t.dashboard.activeBets}
                 </span>
-                <span className="text-lg font-bold text-primary dark:text-blue-400">3</span>
+                <span className="text-lg font-bold text-primary dark:text-blue-400">
+                  {statsLoading ? '...' : activeBets}
+                </span>
               </div>
               <div className="w-full bg-gray-200 h-2 rounded-full neu-in overflow-hidden dark:bg-[#0f131b]">
-                <div className="bg-primary h-full rounded-full w-3/4 dark:bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"></div>
+                <div
+                  className="bg-primary h-full rounded-full dark:bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.5)] transition-all"
+                  style={{ width: `${Math.min(activeBets * 10, 100)}%` }}
+                ></div>
               </div>
               <div className="flex items-center justify-between pt-2">
                 <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t.dashboard.winRate}</span>
-                <span className="text-lg font-bold text-accent-green">68%</span>
+                <span className="text-lg font-bold text-accent-green">
+                  {statsLoading ? '...' : `${winRate}%`}
+                </span>
               </div>
               <div className="w-full bg-gray-200 h-2 rounded-full neu-in overflow-hidden dark:bg-[#0f131b]">
-                <div className="bg-accent-green h-full rounded-full w-[68%] shadow-[0_0_10px_rgba(16,185,129,0.5)]"></div>
+                <div
+                  className="bg-accent-green h-full rounded-full shadow-[0_0_10px_rgba(16,185,129,0.5)] transition-all"
+                  style={{ width: `${winRate}%` }}
+                ></div>
               </div>
             </div>
           </div>
           {/* Proxy wallet status */}
           <div className={`neu-in p-4 rounded-xl border ${isCreatingProxy
-              ? 'border-primary/10 bg-primary/5'
-              : hasProxy
-                ? 'border-accent-green/10 bg-accent-green/5'
-                : 'border-yellow-500/10 bg-yellow-500/5'
+            ? 'border-primary/10 bg-primary/5'
+            : hasProxy
+              ? 'border-accent-green/10 bg-accent-green/5'
+              : 'border-yellow-500/10 bg-yellow-500/5'
             }`}>
             <div className="flex items-center gap-3 mb-2">
               {isCreatingProxy ? (

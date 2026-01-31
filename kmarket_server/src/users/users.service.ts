@@ -4,6 +4,12 @@ import { Repository, DataSource } from 'typeorm';
 import { User } from './entities/user.entity';
 import { Transaction, TransactionType, TransactionStatus } from './entities/transaction.entity';
 
+// Helper: 将 decimal 字符串安全转为 BigInt (去掉小数部分)
+function toBigInt(value: string): bigint {
+    const intPart = value.split('.')[0];
+    return BigInt(intPart);
+}
+
 /**
  * 余额操作选项
  */
@@ -63,8 +69,8 @@ export class UsersService {
         let user = await this.findByAddress(normalizedAddress);
 
         if (!user) {
-            // 新用户默认赠送 1000 余额 (测试用)
-            const defaultBalance = '1000000000000000000000'; // 1000 * 10^18 (Wei)
+            // 新用户默认赠送 1000 余额 (测试用, 6位小数精度 = USDC格式)
+            const defaultBalance = '1000000000'; // 1000 * 10^6
 
             user = this.userRepository.create({
                 address: normalizedAddress,
@@ -94,9 +100,9 @@ export class UsersService {
         const claimable = user.claimable;
 
         const total = (
-            BigInt(available) +
-            BigInt(claimable) +
-            BigInt(inBets)
+            toBigInt(available) +
+            toBigInt(claimable) +
+            toBigInt(inBets)
         ).toString();
 
         return { available, claimable, inBets, total };
@@ -132,7 +138,7 @@ export class UsersService {
             }
 
             const balanceBefore = user.balance;
-            const newBalance = (BigInt(user.balance) + BigInt(amount)).toString();
+            const newBalance = (toBigInt(user.balance) + toBigInt(amount)).toString();
             user.balance = newBalance;
 
             await manager.save(User, user);
@@ -176,8 +182,8 @@ export class UsersService {
                 throw new NotFoundException('User not found');
             }
 
-            const currentBalance = BigInt(user.balance);
-            const deductAmount = BigInt(amount);
+            const currentBalance = toBigInt(user.balance);
+            const deductAmount = toBigInt(amount);
 
             if (currentBalance < deductAmount) {
                 throw new BadRequestException('Insufficient balance');
@@ -228,7 +234,7 @@ export class UsersService {
             }
 
             const claimableBefore = user.claimable;
-            const newClaimable = (BigInt(user.claimable) + BigInt(payout)).toString();
+            const newClaimable = (toBigInt(user.claimable) + toBigInt(payout)).toString();
             user.claimable = newClaimable;
 
             await manager.save(User, user);
@@ -281,7 +287,7 @@ export class UsersService {
             }
 
             const claimableBefore = user.claimable;
-            const newClaimable = (BigInt(user.claimable) + BigInt(refundAmount)).toString();
+            const newClaimable = (toBigInt(user.claimable) + toBigInt(refundAmount)).toString();
             user.claimable = newClaimable;
 
             await manager.save(User, user);
@@ -318,14 +324,14 @@ export class UsersService {
                 throw new NotFoundException('User not found');
             }
 
-            const claimableAmount = BigInt(user.claimable);
+            const claimableAmount = toBigInt(user.claimable);
             if (claimableAmount <= 0n) {
                 throw new BadRequestException('No claimable balance');
             }
 
             const claimed = user.claimable;
             const balanceBefore = user.balance;
-            const newBalance = (BigInt(user.balance) + claimableAmount).toString();
+            const newBalance = (toBigInt(user.balance) + claimableAmount).toString();
 
             user.balance = newBalance;
             user.claimable = '0';
@@ -389,15 +395,15 @@ export class UsersService {
                 throw new NotFoundException('User not found');
             }
 
-            const currentBalance = BigInt(user.balance);
-            const freezeAmount = BigInt(amount);
+            const currentBalance = toBigInt(user.balance);
+            const freezeAmount = toBigInt(amount);
 
             if (currentBalance < freezeAmount) {
                 throw new BadRequestException('Insufficient balance to freeze');
             }
 
             user.balance = (currentBalance - freezeAmount).toString();
-            user.frozenBalance = (BigInt(user.frozenBalance) + freezeAmount).toString();
+            user.frozenBalance = (toBigInt(user.frozenBalance) + freezeAmount).toString();
 
             return manager.save(User, user);
         });
@@ -417,14 +423,14 @@ export class UsersService {
                 throw new NotFoundException('User not found');
             }
 
-            const frozenBalance = BigInt(user.frozenBalance);
-            const unfreezeAmount = BigInt(amount);
+            const frozenBalance = toBigInt(user.frozenBalance);
+            const unfreezeAmount = toBigInt(amount);
 
             if (frozenBalance < unfreezeAmount) {
                 throw new BadRequestException('Insufficient frozen balance');
             }
 
-            user.balance = (BigInt(user.balance) + unfreezeAmount).toString();
+            user.balance = (toBigInt(user.balance) + unfreezeAmount).toString();
             user.frozenBalance = (frozenBalance - unfreezeAmount).toString();
 
             return manager.save(User, user);

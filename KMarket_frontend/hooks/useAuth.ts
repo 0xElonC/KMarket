@@ -20,7 +20,7 @@ export interface UseAuthReturn extends AuthState {
 export function useAuth(): UseAuthReturn {
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  
+
   const [state, setState] = useState<AuthState>({
     isAuthenticated: false,
     isLoading: false,
@@ -71,19 +71,26 @@ export function useAuth(): UseAuthReturn {
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
     try {
+      console.log('Login attempt with address:', address);
+
       // Step 1: Get nonce from backend
       const nonceResponse = await authApi.getNonce();
       if (!nonceResponse.success) {
         throw new Error('Failed to get nonce');
       }
       const { nonce } = nonceResponse.data;
+      console.log('Got nonce:', nonce);
 
-      // Step 2: Sign the message
-      const message = `Sign this message to login to KMarket:\nNonce: ${nonce}`;
-      const signature = await signMessageAsync({ message });
+      // Step 2: Sign the message (nonce IS the message to sign)
+      // Don't pass account - let wagmi use the connected account
+      const message = nonce;
+      console.log('Requesting signature for message:', message);
+      const signature = await signMessageAsync({ account: address, message });
+      console.log('Got signature:', signature);
 
       // Step 3: Login with signature
-      const loginResponse = await authApi.login(address, signature, nonce);
+      console.log('Sending login request with address:', address);
+      const loginResponse = await authApi.login(address, signature, message);
       if (!loginResponse.success) {
         throw new Error(loginResponse.message || 'Login failed');
       }
