@@ -205,6 +205,11 @@ export class BetService {
             settlementTime: bet.settlementTime,
             status: bet.status,
             createdAt: bet.createdAt,
+
+            // 结算相关字段 (仅已结算订单有值)
+            settlementPrice: bet.settlementPrice,
+            payout: bet.payout,
+            settledAt: bet.settledAt,
         };
     }
 }

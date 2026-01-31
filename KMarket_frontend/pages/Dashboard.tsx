@@ -12,6 +12,11 @@ import { TransactionHistorySection } from '../components/dashboard/TransactionHi
 import { AnalyticsSection } from '../components/dashboard/AnalyticsSection';
 import { AccountSection } from '../components/dashboard/AccountSection';
 import DepositWithdrawModal from '../components/DepositWithdrawModal';
+import { useTransactionActivity } from '../hooks/useTransactionActivity';
+import type { ActivityItem } from '../utils/activityUtils';
+import { ActivityList } from '../components/ActivityList';
+import { WalletCard } from '../components/dashboard/WalletCard';
+
 
 type DashboardSection = 'overview' | 'portfolio' | 'transactions' | 'analytics' | 'account';
 type LanguageData = ReturnType<typeof useLanguage>['t'];
@@ -33,7 +38,7 @@ export default function Dashboard({
   const performanceMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Calculate total balance (wallet + trading)
-  const totalBalance = isConnected 
+  const totalBalance = isConnected
     ? (parseFloat(usdcBalance) + parseFloat(depositBalance)).toFixed(2)
     : '0.00';
 
@@ -80,8 +85,8 @@ export default function Dashboard({
 
       {activeSection === 'overview' ? (
         <>
-          <OverviewMainSection 
-            t={t} 
+          <OverviewMainSection
+            t={t}
             totalBalance={totalBalance}
             usdcBalance={usdcBalance}
             depositBalance={depositBalance}
@@ -225,19 +230,19 @@ function DashboardMenu({
   );
 }
 
-function OverviewMainSection({ 
-  t, 
-  totalBalance, 
-  usdcBalance, 
-  depositBalance, 
-  isLoading, 
+function OverviewMainSection({
+  t,
+  totalBalance,
+  usdcBalance,
+  depositBalance,
+  isLoading,
   isConnected,
   hasProxy,
   isCreatingProxy,
   proxyAddress,
-  onDeposit, 
-  onWithdraw 
-}: { 
+  onDeposit,
+  onWithdraw
+}: {
   t: LanguageData;
   totalBalance: string;
   usdcBalance: string;
@@ -335,13 +340,12 @@ function OverviewMainSection({
             </div>
           </div>
           {/* Proxy wallet status */}
-          <div className={`neu-in p-4 rounded-xl border ${
-            isCreatingProxy 
-              ? 'border-primary/10 bg-primary/5' 
-              : hasProxy 
-                ? 'border-accent-green/10 bg-accent-green/5' 
+          <div className={`neu-in p-4 rounded-xl border ${isCreatingProxy
+              ? 'border-primary/10 bg-primary/5'
+              : hasProxy
+                ? 'border-accent-green/10 bg-accent-green/5'
                 : 'border-yellow-500/10 bg-yellow-500/5'
-          }`}>
+            }`}>
             <div className="flex items-center gap-3 mb-2">
               {isCreatingProxy ? (
                 <>
@@ -360,9 +364,9 @@ function OverviewMainSection({
               )}
             </div>
             <p className="text-xs text-gray-600 leading-relaxed dark:text-gray-400">
-              {isCreatingProxy 
+              {isCreatingProxy
                 ? 'Please confirm the transaction in your wallet to create your trading wallet.'
-                : hasProxy 
+                : hasProxy
                   ? `Your trading wallet is ready. Address: ${proxyAddress?.slice(0, 6)}...${proxyAddress?.slice(-4)}`
                   : 'A trading wallet will be created automatically when you connect.'
               }
@@ -374,154 +378,8 @@ function OverviewMainSection({
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-bold text-gray-700 dark:text-white">{t.dashboard.activity}</h2>
-          <div className="neu-in p-1.5 rounded-xl flex items-center bg-gray-200/50 dark:bg-[#0f131b]">
-            <button className="neu-out py-2 px-6 rounded-lg text-sm font-bold text-primary shadow-sm transition-all transform active:scale-95 dark:text-blue-400 dark:shadow-none dark:neu-btn active dark:bg-blue-500/10">
-              {t.dashboard.inProgress}
-            </button>
-            <button className="py-2 px-6 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors dark:text-gray-400 dark:hover:text-gray-200">
-              {t.dashboard.history}
-            </button>
-          </div>
         </div>
-        <div className="grid grid-cols-1 gap-4">
-          <div className="neu-out p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-primary group hover:bg-white/40 transition-colors cursor-pointer dark:border-blue-500 dark:hover:bg-white/5">
-            <div className="flex items-center gap-4">
-              <div className="size-12 rounded-xl neu-in flex items-center justify-center text-gray-400 bg-gray-100 dark:bg-[#0f131b] dark:text-blue-400 border border-blue-500/20">
-                <span className="material-symbols-outlined">currency_bitcoin</span>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg dark:text-white font-mono">BTC/USD</h3>
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  <span>5m Turbo</span>
-                  <span className="size-1 rounded-full bg-gray-400"></span>
-                  <span className="text-blue-400">Live</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end pl-16 md:pl-0">
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.selection}</span>
-                <span className="font-bold text-accent-green flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">trending_up</span> LONG
-                </span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.stake}</span>
-                <span className="font-bold text-gray-200">+2 Ticks</span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.return}</span>
-                <span className="font-bold text-primary dark:text-blue-400">1.85x</span>
-              </div>
-              <div className="neu-in px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 hidden sm:block dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900/30 animate-pulse">
-                LIVE
-              </div>
-            </div>
-          </div>
-
-          <div className="neu-out p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-accent-green group hover:bg-white/40 transition-colors cursor-pointer dark:hover:bg-white/5">
-            <div className="flex items-center gap-4">
-              <div className="size-12 rounded-xl neu-in flex items-center justify-center text-gray-400 bg-gray-100 dark:bg-[#0f131b] dark:text-gray-300 border border-gray-700">
-                <span className="material-symbols-outlined">token</span>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg dark:text-white font-mono">ETH/USD</h3>
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  <span>1m Blitz</span>
-                  <span className="size-1 rounded-full bg-gray-400"></span>
-                  <span>Expired 2m ago</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end pl-16 md:pl-0">
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.selection}</span>
-                <span className="font-bold text-accent-red flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">trending_down</span> SHORT
-                </span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.stake}</span>
-                <span className="font-bold text-accent-green">-15 Ticks</span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.return}</span>
-                <span className="font-bold text-accent-green">+$950.00</span>
-              </div>
-              <div className="neu-in px-3 py-1 rounded-full bg-green-50 text-accent-green text-xs font-bold border border-green-100 hidden sm:block dark:bg-green-900/20 dark:border-green-900/30">
-                WON
-              </div>
-            </div>
-          </div>
-
-          <div className="neu-out p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-gray-300 opacity-80 hover:opacity-100 transition-opacity cursor-pointer dark:border-gray-600 dark:hover:bg-white/5">
-            <div className="flex items-center gap-4">
-              <div className="size-12 rounded-xl neu-in flex items-center justify-center text-gray-400 bg-gray-100 dark:bg-[#0f131b] dark:text-purple-400 border border-purple-500/20">
-                <span className="material-symbols-outlined">deployed_code</span>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg dark:text-white font-mono">SOL/USD</h3>
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  <span>15m Options</span>
-                  <span className="size-1 rounded-full bg-gray-400"></span>
-                  <span>10:45 AM</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end pl-16 md:pl-0">
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.selection}</span>
-                <span className="font-bold text-accent-green flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">trending_up</span> LONG
-                </span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.stake}</span>
-                <span className="font-bold text-accent-red">-4 Ticks</span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.return}</span>
-                <span className="font-bold text-gray-400 line-through dark:text-gray-500">$285.00</span>
-              </div>
-              <div className="neu-in px-3 py-1 rounded-full bg-gray-100 text-gray-400 text-xs font-bold border border-gray-200 hidden sm:block dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600">
-                LOST
-              </div>
-            </div>
-          </div>
-
-          <div className="neu-out p-5 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-l-4 border-blue-500 group hover:bg-white/40 transition-colors cursor-pointer dark:hover:bg-white/5">
-            <div className="flex items-center gap-4">
-              <div className="size-12 rounded-xl neu-in flex items-center justify-center text-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400 border border-blue-500/20">
-                <span className="material-symbols-outlined">account_balance</span>
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-800 text-lg dark:text-white font-mono">USDT Deposit</h3>
-                <div className="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                  <span>Wallet Transfer</span>
-                  <span className="size-1 rounded-full bg-gray-400"></span>
-                  <span>09:30 AM</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end pl-16 md:pl-0">
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.type}</span>
-                <span className="font-bold text-gray-700 dark:text-gray-300">ERC-20</span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.status}</span>
-                <span className="font-bold text-accent-green">Confirmed</span>
-              </div>
-              <div className="flex flex-col items-start md:items-end">
-                <span className="text-xs font-bold text-gray-400 uppercase">{t.dashboard.amount}</span>
-                <span className="font-bold text-gray-700 dark:text-gray-300">3,200 USDT</span>
-              </div>
-              <div className="neu-in px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-xs font-bold border border-blue-100 hidden sm:block dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-900/30">
-                COMPLETED
-              </div>
-            </div>
-          </div>
-        </div>
+        <ActivityList />
       </div>
 
       <LiquidityPoolSection />
@@ -546,133 +404,14 @@ function OverviewSidebar({
 }) {
   const rangeLabel = performanceRange === 'week' ? t.dashboard.week : t.dashboard.lastMonth;
 
+
   return (
     <aside className="w-80 hidden xl:flex flex-col gap-6 shrink-0">
-      <div className="neu-out p-6 rounded-3xl flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-bold text-lg text-gray-700 dark:text-white">{t.dashboard.myWallet}</h2>
-          <button
-            className="neu-btn size-8 rounded-full flex items-center justify-center text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white"
-            type="button"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-          </button>
-        </div>
-        <div className="frosted-glass p-6 rounded-2xl relative overflow-hidden group hover:border-white/30 transition-all cursor-pointer">
-          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
-          <div className="absolute -right-10 -top-10 size-40 bg-blue-500/20 rounded-full blur-3xl"></div>
-          <div className="absolute -left-10 -bottom-10 size-40 bg-purple-500/20 rounded-full blur-3xl"></div>
-          <div className="absolute top-0 right-0 p-4">
-            <span className="material-symbols-outlined text-white/50 text-3xl">contactless</span>
-          </div>
-          <div className="flex flex-col gap-8 relative z-10">
-            <div className="w-12 h-9 rounded bg-gradient-to-br from-yellow-200 to-yellow-500 border border-yellow-600/50 flex items-center justify-center relative shadow-lg">
-              <div className="absolute w-full h-[1px] bg-black/20 top-1/3"></div>
-              <div className="absolute w-full h-[1px] bg-black/20 bottom-1/3"></div>
-              <div className="absolute h-full w-[1px] bg-black/20 left-1/3"></div>
-              <div className="absolute h-full w-[1px] bg-black/20 right-1/3"></div>
-            </div>
-            <div>
-              <p className="font-mono text-gray-200 text-sm tracking-widest mb-2 shadow-black drop-shadow-md">
-                •••• •••• •••• 4288
-              </p>
-              <div className="flex justify-between items-end">
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  {t.dashboard.cardHolder}
-                </p>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                  {t.dashboard.expires}
-                </p>
-              </div>
-              <div className="flex justify-between items-end">
-                <p className="font-bold text-white tracking-wide">ALEX M.</p>
-                <p className="font-bold text-white tracking-wide">12/25</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <WalletCard />
 
-      <div className="neu-out flex-1 p-6 rounded-3xl flex flex-col gap-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="font-bold text-lg text-gray-700 dark:text-white">{t.dashboard.performance}</h2>
-          <div className="relative" ref={performanceMenuRef}>
-            <button
-              className="neu-btn w-28 px-2 py-1 rounded-lg text-xs font-bold text-gray-500 cursor-pointer flex items-center justify-between gap-2 focus:outline-none focus-visible:outline-none focus-visible:ring-0 dark:text-gray-400"
-              type="button"
-              onClick={onToggleMenu}
-              aria-haspopup="listbox"
-              aria-expanded={isPerformanceMenuOpen}
-            >
-              <span className="truncate">{rangeLabel}</span>
-              <span className="material-symbols-outlined text-sm">expand_more</span>
-            </button>
-            {isPerformanceMenuOpen && (
-              <div
-                className="absolute right-0 mt-2 w-28 neu-out rounded-xl p-1 z-20"
-                role="listbox"
-                aria-label={t.dashboard.performance}
-              >
-                <button
-                  className={`w-full text-left px-2 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    performanceRange === 'week'
-                      ? 'neu-in text-primary dark:text-blue-400'
-                      : 'text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white'
-                  }`}
-                  type="button"
-                  onClick={() => onSelectRange('week')}
-                  role="option"
-                  aria-selected={performanceRange === 'week'}
-                >
-                  {t.dashboard.week}
-                </button>
-                <button
-                  className={`w-full text-left px-2 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    performanceRange === 'lastMonth'
-                      ? 'neu-in text-primary dark:text-blue-400'
-                      : 'text-gray-500 hover:text-primary dark:text-gray-400 dark:hover:text-white'
-                  }`}
-                  type="button"
-                  onClick={() => onSelectRange('lastMonth')}
-                  role="option"
-                  aria-selected={performanceRange === 'lastMonth'}
-                >
-                  {t.dashboard.lastMonth}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="flex-1 flex items-end justify-between gap-3 px-2 pb-2">
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[40%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-neon-glow"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">M</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[60%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-neon-glow"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">T</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[30%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar-red rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-[0_0_10px_rgba(239,68,68,0.5)]"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">W</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[85%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-neon-glow"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">T</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[50%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-neon-glow"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">F</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[90%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-neon-bar-green rounded-t-lg h-full opacity-80 group-hover:opacity-100 transition-opacity shadow-[0_0_15px_rgba(16,185,129,0.5)]"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">S</span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-t-lg relative group h-[20%] dark:bg-[#0d1118] neu-in">
-            <div className="absolute bottom-0 w-full bg-gray-400 rounded-t-lg h-full opacity-30 dark:bg-gray-700"></div>
-            <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-gray-400">S</span>
-          </div>
-        </div>
+      {/* 盈亏表现卡片 - 使用新的折线图组件 */}
+      <div className="neu-out rounded-3xl overflow-hidden">
+        <PortfolioPerformanceCard />
       </div>
 
       <div className="neu-out p-5 rounded-3xl">

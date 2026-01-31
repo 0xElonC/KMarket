@@ -36,6 +36,11 @@ export class BetResponseDto {
     settlementTime: Date;
     status: string;
     createdAt: Date;
+
+    // 结算相关字段 (仅已结算订单有值)
+    settlementPrice?: string;  // 结算价格
+    payout?: string;           // 派彩金额
+    settledAt?: Date;          // 实际结算时间
 }
 
 /**
