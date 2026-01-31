@@ -127,6 +127,21 @@ contract UserProxyWallet is ReentrancyGuard {
         emit Deposited(owner, amount, depositBalance);
     }
     
+    function depositmock(uint256 amount) external onlyOwner nonReentrant {
+        if (amount == 0) revert InvalidAmount();
+        
+        // Transfer USDC directly from user to Vault (single transfer, gas efficient)
+        //USDC.safeTransferFrom(msg.sender, address(vault), amount);
+        
+        // Update balance tracking
+        depositBalance += amount;
+        
+        // Notify vault to update accounting (funds already received)
+        //vault.depositFromProxy(owner, amount);
+        
+        emit Deposited(owner, amount, depositBalance);
+    }
+
     /**
      * @notice Withdraw USDC directly from Vault to user (proxy doesn't hold funds)
      * @param amount The amount to withdraw
