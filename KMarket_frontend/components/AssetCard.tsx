@@ -21,7 +21,21 @@ export const AssetCard: React.FC<AssetCardProps> = ({ asset, onNavigate, onSelec
         SOL: 'sunny',
         DOT: 'blur_on',
         LINK: 'link',
-        ADA: 'hub'
+        ADA: 'hub',
+        UNI: 'swap_horiz',
+        AVAX: 'ac_unit',
+        MATIC: 'hexagon',
+        ATOM: 'blur_circular',
+        NEAR: 'near_me',
+        ARB: 'architecture',
+        OP: 'circle',
+        AAVE: 'account_balance',
+        MKR: 'precision_manufacturing',
+        CRV: 'show_chart',
+        DYDX: 'trending_up',
+        APE: 'pets',
+        SAND: 'landscape',
+        MANA: 'public',
     };
     const toRgba = (hex: string, alpha: number) => {
         const match = hex.replace('#', '').match(/.{1,2}/g);

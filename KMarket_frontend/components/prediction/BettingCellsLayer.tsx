@@ -88,6 +88,7 @@ interface BettingCellsLayerProps {
   scrollOffsetPercent?: number;
   lockLineX?: number;
   lockLinePercent?: number;
+  lockTimeSec?: number;  // 新增: 基于时间的 Lock 判定 (秒)
   defaultBetAmount: number;
   onBet?: (cellId: string, amount: number) => void;
 }
@@ -159,6 +160,7 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
   scrollOffsetPercent = 0,
   lockLineX = 0,
   lockLinePercent = 0,
+  lockTimeSec = 5,
   defaultBetAmount,
   onBet
 }: BettingCellsLayerProps) {
@@ -425,6 +427,8 @@ export const BettingCellsLayer = memo(function BettingCellsLayer({
         const top = usePx && (rowHeightPx ?? 0) > 0
           ? cell.row * (rowHeightPx ?? 0)
           : cell.row * cellHeightPercent;
+
+        // 位置基准 Lock 判定: 列的左边缘到达 Lock 线位置时锁定
         const cellLeftInView = usePx
           ? (left as number) - scrollOffsetPx
           : (left as number) - scrollOffsetPercent;

@@ -8,7 +8,8 @@ export const LOCK_LINE_RATIO = 0.67;
 
 // K项目风格配置 - 流动价格曲线
 export const FLOW_CONFIG = {
-  SPEED: 12,              // 格子移动速度 px/s（K项目风格：恒定速度）
+  SPEED: 12,              // 格子移动速度 px/s（fallback，viewportWidth=0时使用）
+  LOCK_TIME_SEC: 30,      // 新列从右边缘滚动到Lock线的固定时间（秒）
   PRICE_RANGE: 5,         // Y轴价格范围 ±5%
   CENTER_LINE_RATIO: 0.4, // 中心价格线位置（屏幕40%）
   PRICE_SMOOTH: 0.1,      // 价格平滑缓动因子

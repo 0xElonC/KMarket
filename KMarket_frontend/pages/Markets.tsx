@@ -2,17 +2,12 @@ import React, { useState, useMemo } from 'react';
 import { Page } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AssetCard } from '../components/AssetCard';
+import { useGateMarkets, MarketAsset } from '../hooks/useGateMarkets';
 
-// Expanded mock data with categories
-const initialAssets = [
-  { id: '1', symbol: 'BTC', name: 'Bitcoin Network', price: 48294.12, change: 2.45, color: '#10b981', category: 'Layer 1', data: [35,30,32,20,25,15,22,10,18,5,12] },
-  { id: '2', symbol: 'ETH', name: 'Ethereum Mainnet', price: 3402.80, change: 1.12, color: '#10b981', category: 'Layer 1', data: [30,35,20,15,25,30,28,32,40,38,42] },
-  { id: '3', symbol: 'SOL', name: 'Solana', price: 148.50, change: -0.85, color: '#ef4444', category: 'Layer 1', data: [10,15,5,20,18,30,25,35,20,15,10] },
-  { id: '4', symbol: 'DOT', name: 'Polkadot', price: 7.24, change: -0.05, color: '#94a3b8', category: 'Layer 1', data: [20,22,18,20,19,20,20,21,19,20,20] },
-  { id: '5', symbol: 'LINK', name: 'Chainlink', price: 18.90, change: 4.50, color: '#10b981', category: 'DeFi', data: [35,30,25,28,15,10,5,12,18,25,30] },
-  { id: '6', symbol: 'ADA', name: 'Cardano', price: 0.58, change: -1.20, color: '#ef4444', category: 'Layer 1', data: [10,20,15,25,30,28,25,20,15,10,5] },
-  { id: '7', symbol: 'UNI', name: 'Uniswap', price: 12.40, change: 3.20, color: '#10b981', category: 'DeFi', data: [20,25,30,28,35,40,38,42,45,40,48] },
-  { id: '8', symbol: 'MANA', name: 'Decentraland', price: 0.65, change: -5.40, color: '#ef4444', category: 'Metaverse', data: [50,45,40,35,30,28,25,20,15,18,16] },
+// Fallback mock data (used when no live data yet)
+const fallbackAssets: MarketAsset[] = [
+  { id: 'BTC', symbol: 'BTC', name: 'Bitcoin', price: 0, change: 0, color: '#94a3b8', category: 'Layer 1', data: [25,25,25,25,25], volume: 0, high24h: 0, low24h: 0 },
+  { id: 'ETH', symbol: 'ETH', name: 'Ethereum', price: 0, change: 0, color: '#94a3b8', category: 'Layer 1', data: [25,25,25,25,25], volume: 0, high24h: 0, low24h: 0 },
 ];
 
 export default function Markets({
@@ -23,9 +18,13 @@ export default function Markets({
   onSelectAsset: (asset: { symbol: string; name: string; price: number; change: number }) => void;
 }) {
   const { t } = useLanguage();
+  const { assets: liveAssets, status } = useGateMarkets();
   const [activeFilter, setActiveFilter] = useState('All');
-  const [favorites, setFavorites] = useState<string[]>(['1']); // BTC favorited by default
+  const [favorites, setFavorites] = useState<string[]>(['BTC']); // BTC favorited by default
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Use live assets if available, otherwise fallback
+  const assets = liveAssets.length > 0 ? liveAssets : fallbackAssets;
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -36,19 +35,20 @@ export default function Markets({
 
   // Filter Logic
   const filteredAssets = useMemo(() => {
-    let data = initialAssets;
+    let data = assets;
     
     if (activeFilter === t.markets.favorites) {
       data = data.filter(asset => favorites.includes(asset.id));
     } else if (activeFilter !== 'All' && activeFilter !== t.markets.all) {
        // Simple mapping for demo purposes matching translations to data categories
-       const categoryMap: Record<string, string> = {
-           [t.markets.defi]: 'DeFi',
-           [t.markets.l1]: 'Layer 1',
-           [t.markets.meta]: 'Metaverse'
+       const categoryMap: Record<string, string[]> = {
+           [t.markets.defi]: ['DeFi'],
+           [t.markets.l1]: ['Layer 1'],
+           [t.markets.l2]: ['Layer 2'],
+           [t.markets.meta]: ['Metaverse']
        };
-       const targetCategory = categoryMap[activeFilter] || activeFilter;
-       data = data.filter(asset => asset.category === targetCategory);
+       const targetCategories = categoryMap[activeFilter] || [activeFilter];
+       data = data.filter(asset => targetCategories.includes(asset.category));
     }
     
     if (searchTerm.trim()) {
@@ -59,11 +59,22 @@ export default function Markets({
       );
     }
 
-    return data;
-  }, [activeFilter, favorites, searchTerm, t]);
+    // Sort by volume (highest first)
+    return data.sort((a, b) => b.volume - a.volume);
+  }, [activeFilter, favorites, searchTerm, t, assets]);
 
   return (
     <div className="flex flex-col gap-8 max-w-[1600px] mx-auto w-full">
+        {/* Status indicator */}
+        <div className="flex items-center gap-2 text-xs">
+          <span className={`w-2 h-2 rounded-full ${status === 'live' ? 'bg-[#00ff88]' : status === 'error' ? 'bg-[#ff4757]' : 'bg-yellow-500 animate-pulse'}`} />
+          <span className="text-gray-500">
+            {status === 'live' ? 'Gate.io 实时数据' : status === 'error' ? '连接失败' : '连接中...'}
+          </span>
+          <span className="text-gray-600">|</span>
+          <span className="text-gray-500">{assets.length} 个交易对</span>
+        </div>
+
         {/* Filters */}
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
             <div className="flex gap-4 overflow-x-auto p-4 w-full md:w-auto no-scrollbar">
@@ -86,6 +97,11 @@ export default function Markets({
                     label={t.markets.l1} 
                     active={activeFilter === t.markets.l1} 
                     onClick={() => setActiveFilter(t.markets.l1)}
+                />
+                <FilterButton 
+                    label={t.markets.l2 || 'Layer 2'} 
+                    active={activeFilter === (t.markets.l2 || 'Layer 2')} 
+                    onClick={() => setActiveFilter(t.markets.l2 || 'Layer 2')}
                 />
                 <FilterButton 
                     label={t.markets.meta} 

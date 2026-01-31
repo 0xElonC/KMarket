@@ -419,7 +419,7 @@ GET /market/kline
 
 ### 4.3 获取下注网格 ⭐
 
-获取当前可下注的时间片和价格区间网格。
+获取 6×6 下注宫格，按列返回数据。
 
 ```
 GET /market/grid
@@ -442,57 +442,52 @@ GET /market/grid
     "symbol": "ETHUSDT",
     "currentPrice": "2500.50",
     "currentTime": 1706600000000,
-    "slices": [
-      {
-        "id": "1706600180000",
-        "settlementTime": 1706600180000,
-        "basisPrice": "2500.00",
-        "locked": false,
-        "status": "betting",
-        "ticks": [
-          {
-            "priceTick": -5,
-            "priceRange": {
-              "lower": "2437.50",
-              "upper": "2450.00"
-            },
-            "odds": 3.25
-          },
-          {
-            "priceTick": 0,
-            "priceRange": {
-              "lower": "2487.50",
-              "upper": "2512.50"
-            },
-            "odds": 1.85
-          },
-          {
-            "priceTick": 5,
-            "priceRange": {
-              "lower": "2550.00",
-              "upper": "2562.50"
-            },
-            "odds": 3.25
-          }
-        ]
-      }
-    ]
+    "intervalSec": 3,
+    "col1": [
+      { "odds": "2.85", "expiryTime": 1706599994000, "priceRange": { "min": 2550, "max": null, "label": "+2%↑", "percentMin": 2, "percentMax": 100 }, "tickId": "1706599994000_1", "status": "settled", "basisPrice": "2500.00", "isWinning": false },
+      { "odds": "2.10", "expiryTime": 1706599994000, "priceRange": { "min": 2525, "max": 2550, "label": "+1%~+2%", "percentMin": 1, "percentMax": 2 }, "tickId": "1706599994000_2", "status": "settled", "basisPrice": "2500.00", "isWinning": false },
+      { "odds": "1.55", "expiryTime": 1706599994000, "priceRange": { "min": 2500, "max": 2525, "label": "0~+1%", "percentMin": 0, "percentMax": 1 }, "tickId": "1706599994000_3", "status": "settled", "basisPrice": "2500.00", "isWinning": true },
+      { "odds": "1.55", "expiryTime": 1706599994000, "priceRange": { "min": 2475, "max": 2500, "label": "-1%~0", "percentMin": -1, "percentMax": 0 }, "tickId": "1706599994000_4", "status": "settled", "basisPrice": "2500.00", "isWinning": false },
+      { "odds": "2.10", "expiryTime": 1706599994000, "priceRange": { "min": 2450, "max": 2475, "label": "-2%~-1%", "percentMin": -2, "percentMax": -1 }, "tickId": "1706599994000_5", "status": "settled", "basisPrice": "2500.00", "isWinning": false },
+      { "odds": "2.85", "expiryTime": 1706599994000, "priceRange": { "min": null, "max": 2450, "label": "-2%↓", "percentMin": -100, "percentMax": -2 }, "tickId": "1706599994000_6", "status": "settled", "basisPrice": "2500.00", "isWinning": false }
+    ],
+    "col2": [...],
+    "col3": [...],
+    "col4": [...],
+    "col5": [...],
+    "col6": [...],
+    "update": true
   }
 }
+```
+
+**网格布局**:
+
+```
+          col1    col2    col3    col4    col5    col6
+         T-6s    T-3s    T+3s    T+6s    T+9s   T+12s
+        ───────────────────────────────────────────────
+Row 1   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  大涨 +2%↑
+Row 2   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  中涨 +1%~+2%
+Row 3   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  小涨 0~+1%
+Row 4   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  小跌 -1%~0
+Row 5   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  中跌 -2%~-1%
+Row 6   │ 锁定  │ 锁定  │ 可下注 │ 可下注 │ 可下注 │ 可下注 │  大跌 -2%↓
 ```
 
 **字段说明**:
 
 | 字段 | 说明 |
 |------|------|
-| slices | 时间片数组 (未来 360 秒) |
-| slices[].settlementTime | 结算时间 (ms timestamp) |
-| slices[].basisPrice | 基准价格 |
-| slices[].locked | 是否锁定 (true = 不可下注) |
-| slices[].ticks | 价格区间数组 |
-| ticks[].priceTick | Tick 索引 (-20 ~ +20) |
-| ticks[].priceRange | 价格区间 [lower, upper) |
-| ticks[].odds | 当前赔率 |
+| col1-col6 | 6 列数据，每列包含 6 个格子 |
+| intervalSec | 列间隔 (3 秒) |
+| update | 是否发生滑动 (用于前端优化) |
+| odds | 当前赔率 |
+| expiryTime | 到期时间戳 (ms) |
+| tickId | 唯一标识，格式 `{expiryTime}_{row}` |
+| status | 状态: settled/locked/betting |
+| priceRange.label | 价格区间标签 |
+| isWinning | 是否中奖区间 (仅 settled)
 
 ---
 
@@ -512,17 +507,25 @@ POST /trade/bet
 |------|------|:----:|------|
 | symbol | string | ✅ | 交易对 |
 | amount | string | ✅ | 下注金额 (Wei) |
-| priceTick | number | ✅ | 价格 Tick (-20 ~ +20) |
-| settlementTime | number | ✅ | 结算时间 (ms timestamp) |
+| tickId | string | ✅ | 格子ID (从网格接口获取) |
 
 ```json
 {
   "symbol": "ETHUSDT",
   "amount": "100000000000000000000",
-  "priceTick": 5,
-  "settlementTime": 1706600180000
+  "tickId": "1706600180000_3"
 }
 ```
+
+**tickId 格式**: `{expiryTime}_{rowIndex}`
+- `expiryTime`: 到期时间戳 (ms)
+- `rowIndex`: 行索引 (1-6)
+  - 1: +2%↑ (大涨)
+  - 2: +1%~+2% (中涨)
+  - 3: 0~+1% (小涨)
+  - 4: -1%~0 (小跌)
+  - 5: -2%~-1% (中跌)
+  - 6: -2%↓ (大跌)
 
 **响应示例**:
 
@@ -532,14 +535,16 @@ POST /trade/bet
   "data": {
     "id": 12345,
     "symbol": "ETHUSDT",
+    "tickId": "1706600180000_3",
+    "rowIndex": 3,
     "amount": "100000000000000000000",
-    "priceTick": 5,
     "priceRange": {
-      "lower": "2550.00",
-      "upper": "2562.50"
+      "min": "2500.00",
+      "max": "2525.00",
+      "label": "0~+1%"
     },
-    "basePrice": "2500.00",
-    "odds": "3.25",
+    "basisPrice": "2500.00",
+    "odds": "1.60",
     "settlementTime": "2026-01-30T12:03:00Z",
     "status": "active",
     "createdAt": "2026-01-30T12:00:00Z"
@@ -551,9 +556,8 @@ POST /trade/bet
 
 | 错误 | 说明 |
 |------|------|
-| 无效的结算时间 | settlementTime 不在有效网格范围内 |
-| 区块已锁定 | 该时间片已锁定不可下注 |
-| 无效的价格区间 | priceTick 超出范围 |
+| 区块已过期 | tickId 对应的区块不存在或已过期 |
+| 区块已锁定 | 该格子距离结算时间 ≤6s，无法下注 |
 | 余额不足 | 可用余额不足 |
 
 ---

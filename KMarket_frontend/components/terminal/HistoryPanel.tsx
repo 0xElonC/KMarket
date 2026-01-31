@@ -26,7 +26,7 @@ interface HistoryPanelProps {
   };
 }
 
-export function HistoryPanel({ items, rangeLabels, labels }: HistoryPanelProps) {
+const HistoryPanel = React.memo(function HistoryPanel({ items, rangeLabels, labels }: HistoryPanelProps) {
   return (
     <aside className="w-64 flex-col gap-4 hidden lg:flex shrink-0 h-full min-h-0 ml-4 mb-4 pt-4">
       <div className="flex items-center justify-between px-4 py-1">
@@ -83,4 +83,6 @@ export function HistoryPanel({ items, rangeLabels, labels }: HistoryPanelProps) 
       </div>
     </aside>
   );
-}
+});
+
+export { HistoryPanel };

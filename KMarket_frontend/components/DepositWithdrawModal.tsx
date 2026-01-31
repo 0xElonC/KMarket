@@ -7,14 +7,26 @@ interface DepositWithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   mode: 'deposit' | 'withdraw';
+  onSuccess?: (amount: string, mode: 'deposit' | 'withdraw') => void;
+  virtualBalance?: number; // 虚拟账本余额
 }
 
-export default function DepositWithdrawModal({ isOpen, onClose, mode }: DepositWithdrawModalProps) {
+export default function DepositWithdrawModal({ isOpen, onClose, mode, onSuccess, virtualBalance }: DepositWithdrawModalProps) {
   const [amount, setAmount] = useState('');
   const { usdcBalance, isConnected, address } = useWallet();
   const { hasProxy, proxyAddress, depositBalance, isLoading: isLoadingProxy, isCreatingProxy, createProxy, refetch } = useProxyWallet();
   const deposit = useDeposit();
   const withdraw = useWithdraw();
+
+  const isDeposit = mode === 'deposit';
+  // 提现时使用虚拟余额，充值时使用钱包余额
+  const displayTradingBalance = virtualBalance !== undefined ? virtualBalance : parseFloat(depositBalance);
+  const maxAmount = isDeposit ? usdcBalance : displayTradingBalance.toFixed(2);
+  const isProcessing = isDeposit 
+    ? deposit.isPending || deposit.isApproving || deposit.isDepositing
+    : withdraw.isPending || withdraw.isWithdrawing;
+  const isSuccess = isDeposit ? deposit.isSuccess : withdraw.isSuccess;
+  const error = isDeposit ? deposit.error : withdraw.error;
 
   // Reset state when modal opens/closes
   useEffect(() => {
@@ -26,15 +38,15 @@ export default function DepositWithdrawModal({ isOpen, onClose, mode }: DepositW
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  // Call onSuccess when transaction completes
+  useEffect(() => {
+    if (isSuccess && amount && isOpen) {
+      onSuccess?.(amount, mode);
+    }
+  }, [isSuccess, amount, mode, onSuccess, isOpen]);
 
-  const isDeposit = mode === 'deposit';
-  const maxAmount = isDeposit ? usdcBalance : depositBalance;
-  const isProcessing = isDeposit 
-    ? deposit.isPending || deposit.isApproving || deposit.isDepositing
-    : withdraw.isPending || withdraw.isWithdrawing;
-  const isSuccess = isDeposit ? deposit.isSuccess : withdraw.isSuccess;
-  const error = isDeposit ? deposit.error : withdraw.error;
+  // Early return AFTER all hooks
+  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,7 +163,7 @@ export default function DepositWithdrawModal({ isOpen, onClose, mode }: DepositW
           </div>
           <div className="neu-in p-4 rounded-xl">
             <p className="text-xs text-gray-400 mb-1">Trading Balance</p>
-            <p className="text-lg font-bold text-primary">${parseFloat(depositBalance).toFixed(2)} USDC</p>
+            <p className="text-lg font-bold text-primary">${displayTradingBalance.toFixed(2)} USDC</p>
           </div>
         </div>
 

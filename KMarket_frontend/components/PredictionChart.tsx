@@ -28,6 +28,7 @@ interface PredictionChartProps {
   visibleCols?: number;
   timeIntervals?: string[];
   updateCount?: number;
+  lockTimeSec?: number; // 基于时间的 Lock 判定 (秒)
 }
 
 export function PredictionChart({
@@ -43,7 +44,8 @@ export function PredictionChart({
   bufferRows = 0,
   visibleCols = DEFAULT_VISIBLE_COLS,
   timeIntervals = ['+10m', '+30m', '+1h'],
-  updateCount = 0
+  updateCount = 0,
+  lockTimeSec = 5
 }: PredictionChartProps) {
   const chartViewportRef = useRef<HTMLDivElement | null>(null);
   const priceCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -66,8 +68,6 @@ export function PredictionChart({
   const pricePointsRef = useRef<UpdateCountPricePoint[]>([]);
 
   // K项目风格：价格平滑动画状态（只用 ref，不触发重渲染）
-  const [basePrice, setBasePrice] = useState<number | null>(null);
-  const basePriceRef = useRef<number | null>(null);
   const animPriceRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(performance.now());
   const animationRef = useRef<number>();
@@ -94,15 +94,35 @@ export function PredictionChart({
   const lockLinePercent = LOCK_LINE_RATIO * 100;
   const centerLineX = viewportSize.width * CENTER_LINE_RATIO;
 
-  // 初始化基准价格 - Y轴中心为 2750
+  // 初始化动画价格
   useEffect(() => {
-    if (basePrice === null) {
-      const initialBasePrice = 2750;
-      setBasePrice(initialBasePrice);
-      basePriceRef.current = initialBasePrice;
-      animPriceRef.current = currentPrice ?? initialBasePrice;
+    if (animPriceRef.current === null && currentPrice !== null) {
+      animPriceRef.current = currentPrice;
+      console.log('📊 Anim price initialized to:', currentPrice);
+    } else if (animPriceRef.current === null && candleData.length > 0) {
+      const lastClose = candleData[candleData.length - 1].close;
+      animPriceRef.current = lastClose;
+      console.log('📊 Anim price initialized from candle data:', lastClose);
     }
-  }, [currentPrice, basePrice]);
+  }, [currentPrice, candleData]);
+
+  // 当 candleData 首次加载或大幅变化时，重置价格点历史
+  const lastCandleCloseRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (candleData.length === 0) return;
+    
+    const lastClose = candleData[candleData.length - 1].close;
+    const prevClose = lastCandleCloseRef.current;
+    
+    // 首次加载或价格变化超过 10%
+    if (prevClose === null || Math.abs((lastClose - prevClose) / prevClose) > 0.1) {
+      console.log('📊 Resetting price points due to data change:', lastClose);
+      animPriceRef.current = lastClose;
+      pricePointsRef.current = []; // 清空价格点历史
+    }
+    
+    lastCandleCloseRef.current = lastClose;
+  }, [candleData]);
 
   // 价格点记录已移至 RAF 循环中，基于滚动位置派生的 updateCount
 
@@ -141,18 +161,13 @@ export function PredictionChart({
     onPanChange?.(panOffset);
   }, [panOffset, onPanChange]);
 
-  // 计算价格范围 - K项目风格：基于 basePrice ± PRICE_RANGE%
+  // 计算价格范围 - 使用实际K线数据计算
   const priceRange = useMemo(() => {
-    if (basePrice === null) {
-      // 降级到candleData计算
-      const domain = computePriceDomain(candleData);
-      return { min: domain.min, max: domain.max, range: domain.max - domain.min || 1 };
-    }
-    const range = basePrice * (FLOW_CONFIG.PRICE_RANGE / 100) * 2;
-    const min = basePrice - range / 2;
-    const max = basePrice + range / 2;
-    return { min, max, range };
-  }, [basePrice, candleData]);
+    const domain = computePriceDomain(candleData);
+    const range = domain.max - domain.min || 1;
+    console.log('📊 Price range:', { min: domain.min.toFixed(2), max: domain.max.toFixed(2), range: range.toFixed(2) });
+    return { min: domain.min, max: domain.max, range };
+  }, [candleData]);
 
   const rowValue = priceRange.range / gridRows;
   const maxPanOffset = bufferRows > 0 ? rowValue * bufferRows : 0;
@@ -196,14 +211,14 @@ export function PredictionChart({
     }
   }, [maxPanOffset]);
 
-  // K项目风格：价格到Y坐标的映射
+  // K项目风格：价格到Y坐标的映射 - 使用实际价格范围
   const priceToY = (price: number): number => {
-    if (basePriceRef.current === null) return viewportSize.height / 2;
-    const bp = basePriceRef.current;
-    const pct = (price - bp) / bp * 100;
-    const totalH = viewportSize.height;
-    // 价格越高Y越小
-    return totalH / 2 - (pct / FLOW_CONFIG.PRICE_RANGE) * (totalH / 2);
+    const { min, max, range } = priceRange;
+    if (range <= 0) return viewportSize.height / 2;
+    
+    // 价格越高Y越小（屏幕坐标系Y轴向下）
+    const normalizedPrice = (price - min) / range; // 0 到 1
+    return viewportSize.height * (1 - normalizedPrice);
   };
 
   // K项目风格：Canvas动画循环 - 绘制发光价格曲线 + 统一平滑滚动
@@ -215,6 +230,9 @@ export function PredictionChart({
 
     const width = viewportSize.width;
     const height = viewportSize.height;
+    const dynamicSpeed = width > 0
+      ? (width * (1 - LOCK_LINE_RATIO)) / FLOW_CONFIG.LOCK_TIME_SEC
+      : FLOW_CONFIG.SPEED;
     const dpr = window.devicePixelRatio || 1;
     const canvasWidth = Math.max(1, Math.round(width * dpr));
     const canvasHeight = Math.max(1, Math.round(height * dpr));
@@ -242,8 +260,8 @@ export function PredictionChart({
 
       // 注意：不再更新 basePrice，保持Y坐标系固定，避免价格曲线与网格偏离
 
-      // K项目风格：恒定速度平滑滚动
-      smoothScrollRef.current += FLOW_CONFIG.SPEED * dt;
+      // K项目风格：动态速度平滑滚动（固定30秒到Lock线）
+      smoothScrollRef.current += dynamicSpeed * dt;
       // 直接操作 DOM，避免每帧 React 重渲染
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.transform = `translateX(-${smoothScrollRef.current}px)`;
@@ -268,7 +286,7 @@ export function PredictionChart({
 
       // 绘制价格曲线（基于平滑滚动偏移，与网格完美同步）
       const pricePoints = pricePointsRef.current;
-      if (pricePoints.length >= 1 && basePriceRef.current !== null && gridWidthPx > 0) {
+      if (pricePoints.length >= 1 && gridWidthPx > 0) {
         const centerX = width * CENTER_LINE_RATIO;
         const pts: { x: number; y: number }[] = [];
 
@@ -390,6 +408,7 @@ export function PredictionChart({
               scrollOffsetPercent={scrollOffsetPercent}
               lockLineX={lockLineX}
               lockLinePercent={lockLinePercent}
+              lockTimeSec={lockTimeSec}
               defaultBetAmount={DEFAULT_BET_AMOUNT}
               onBet={onBet}
             />
