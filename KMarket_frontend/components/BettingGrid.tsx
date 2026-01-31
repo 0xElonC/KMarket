@@ -10,13 +10,18 @@ interface BettingGridProps {
   onBet?: (cellId: string, amount: number) => void;
 }
 
-// 单元格样式映射
+// 单元格样式映射 (包含K项目风格状态)
 const cellStyles: Record<BetCellStatus, string> = {
   default: 'bet-cell-base',
   selected: 'bet-cell-base bet-cell-selected',
   win: 'bet-cell-base bet-cell-win pulse-gold',
   fail: 'bet-cell-base bet-cell-fail',
-  dissolved: 'bet-cell-base bet-cell-dissolved'
+  dissolved: 'bet-cell-base bet-cell-dissolved',
+  // K项目风格状态
+  idle: 'bet-cell-base',
+  active: 'bet-cell-base bet-cell-selected',
+  won: 'bet-cell-base bet-cell-win pulse-gold',
+  lost: 'bet-cell-base bet-cell-fail'
 };
 
 // 标签颜色映射
@@ -25,7 +30,12 @@ const labelColors: Record<BetCellStatus, string> = {
   selected: 'text-blue-400',
   win: 'text-yellow-500',
   fail: 'text-red-400 opacity-80',
-  dissolved: 'text-gray-600'
+  dissolved: 'text-gray-600',
+  // K项目风格状态
+  idle: 'text-gray-600 group-hover:text-gray-400',
+  active: 'text-blue-400',
+  won: 'text-yellow-500',
+  lost: 'text-red-400 opacity-80'
 };
 
 // 赔率颜色映射
@@ -34,7 +44,12 @@ const oddsColors: Record<BetCellStatus, string> = {
   selected: 'text-white font-bold drop-shadow-md',
   win: 'text-white font-bold drop-shadow-md',
   fail: 'text-red-300',
-  dissolved: 'text-gray-500'
+  dissolved: 'text-gray-500',
+  // K项目风格状态
+  idle: 'text-gray-500 text-glow-hover',
+  active: 'text-white font-bold drop-shadow-md',
+  won: 'text-white font-bold drop-shadow-md',
+  lost: 'text-red-300'
 };
 
 export function BettingGrid({

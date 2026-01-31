@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { CandleData } from '../types';
 
 const generateData = (basePrice: number, volatility: number, count: number = 40) => {
@@ -51,35 +51,40 @@ const generateNextCandle = (lastCandle: CandleData, volatility: number): CandleD
 interface UseMockCandlesOptions {
   basePrice: number;
   volatilityRatio?: number;
+  updateCount?: number;  // K项目风格：滚动驱动K线生成
   enabled?: boolean;
 }
 
-export function useMockCandles({ basePrice, volatilityRatio = 0.005, enabled = true }: UseMockCandlesOptions) {
+export function useMockCandles({
+  basePrice,
+  volatilityRatio = 0.005,
+  updateCount = 0,
+  enabled = true
+}: UseMockCandlesOptions) {
   const [chartData, setChartData] = useState<CandleData[]>([]);
+  const lastUCRef = useRef(-1);
 
   useEffect(() => {
     if (!enabled) return;
     const volatility = basePrice * volatilityRatio;
     setChartData(generateData(basePrice, volatility));
+    lastUCRef.current = -1;
   }, [basePrice, volatilityRatio, enabled]);
 
+  // K项目风格：当 updateCount 变化时生成新K线（由滚动驱动）
   useEffect(() => {
     if (!enabled) return;
+    if (updateCount <= lastUCRef.current) return;
+    lastUCRef.current = updateCount;
+
     const volatility = basePrice * volatilityRatio;
-
-    const interval = setInterval(() => {
-      setChartData(prevData => {
-        if (prevData.length === 0) return prevData;
-
-        const lastCandle = prevData[prevData.length - 1];
-        const newCandle = generateNextCandle(lastCandle, volatility);
-
-        return [...prevData.slice(-39), newCandle];
-      });
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [basePrice, volatilityRatio, enabled]);
+    setChartData(prevData => {
+      if (prevData.length === 0) return prevData;
+      const lastCandle = prevData[prevData.length - 1];
+      const newCandle = generateNextCandle(lastCandle, volatility);
+      return [...prevData.slice(-39), newCandle];
+    });
+  }, [updateCount, basePrice, volatilityRatio, enabled]);
 
   return { chartData, setChartData };
 }

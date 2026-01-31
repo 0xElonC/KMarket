@@ -4,17 +4,15 @@ import { BetCell } from '../../types';
 
 // 根据 betType 获取单元格样式
 const getCellStyle = (status: string, betType: 'high' | 'low', isLocked: boolean) => {
+  // 结算后的格子使用普通样式（变灰处理由 shouldGray 控制）
+  if (status === 'win' || status === 'fail') {
+    return 'bet-cell-base';
+  }
   if (status === 'selected') {
     if (betType === 'high') {
       return isLocked ? 'bet-cell-base bet-cell-selected-high-deep' : 'bet-cell-base bet-cell-selected-high';
     }
     return isLocked ? 'bet-cell-base bet-cell-selected-low-deep' : 'bet-cell-base bet-cell-selected-low';
-  }
-  if (status === 'win') {
-    return 'bet-cell-base bet-cell-win-flash';
-  }
-  if (status === 'fail') {
-    return 'bet-cell-base bet-cell-fail-physics';
   }
   return {
     default: 'bet-cell-base',
@@ -23,33 +21,33 @@ const getCellStyle = (status: string, betType: 'high' | 'low', isLocked: boolean
 };
 
 // 根据 betType 获取标签颜色
-const getLabelColor = (status: string, betType: 'high' | 'low') => {
+const getLabelColor = (status: string, betType: 'high' | 'low', isLockedDefault: boolean) => {
+  // LOCK 后失效的下注块（未下注）或结算后都变灰
+  if (isLockedDefault || status === 'win' || status === 'fail') {
+    return 'text-gray-500';
+  }
   if (status === 'default') {
     return betType === 'high' ? 'text-emerald-600 group-hover:text-emerald-400' : 'text-red-600 group-hover:text-red-400';
   }
   if (status === 'selected') {
     return betType === 'high' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold';
   }
-  return {
-    win: 'text-white font-bold',
-    fail: 'text-gray-400',
-    dissolved: 'text-gray-600'
-  }[status] || 'text-gray-600';
+  return 'text-gray-600';
 };
 
 // 根据 betType 获取赔率颜色
-const getOddsColor = (status: string, betType: 'high' | 'low') => {
+const getOddsColor = (status: string, betType: 'high' | 'low', isLockedDefault: boolean) => {
+  // LOCK 后失效的下注块（未下注）或结算后都变灰
+  if (isLockedDefault || status === 'win' || status === 'fail') {
+    return 'text-gray-500';
+  }
   if (status === 'default') {
     return betType === 'high' ? 'text-emerald-500/70 text-glow-hover' : 'text-red-500/70 text-glow-hover';
   }
   if (status === 'selected') {
     return 'text-white font-bold drop-shadow-md';
   }
-  return {
-    win: 'text-white font-bold',
-    fail: 'text-gray-500',
-    dissolved: 'text-gray-500'
-  }[status] || 'text-gray-500';
+  return 'text-gray-500';
 };
 
 // 粒子接口
@@ -364,8 +362,10 @@ export function BettingCellsLayer({
           : (left as number) - scrollOffsetPercent;
         const isLocked = usePx ? cellLeftInView <= lockLineX : cellLeftInView <= lockLinePercent;
         const effectiveStatus = cell.status;
-        const shouldHideInfo = isLocked && cell.status === 'default';
-        const shouldGray = isLocked && cell.status === 'default';
+        // LOCK 后失效的下注块（未下注的）变灰
+        const isLockedDefault = isLocked && cell.status === 'default';
+        // 失效的或结算后的格子变灰且禁用交互
+        const shouldGray = isLockedDefault || cell.status === 'win' || cell.status === 'fail';
 
         return (
           <div
@@ -382,14 +382,10 @@ export function BettingCellsLayer({
               onBet?.(cell.id, defaultBetAmount);
             }}
           >
-            {!shouldHideInfo && (
-              <>
-                <span className={`text-[9px] font-bold uppercase ${getLabelColor(effectiveStatus, cell.betType)}`}>
-                  {cell.status === 'selected' ? 'BET' : cell.label}
-                </span>
-                <span className={`text-[10px] font-mono mt-1 ${getOddsColor(effectiveStatus, cell.betType)}`}>{cell.odds.toFixed(1)}x</span>
-              </>
-            )}
+            <span className={`text-[9px] font-bold uppercase ${getLabelColor(effectiveStatus, cell.betType, isLockedDefault)}`}>
+              {cell.status === 'selected' ? 'BET' : cell.label}
+            </span>
+            <span className={`text-[10px] font-mono mt-1 ${getOddsColor(effectiveStatus, cell.betType, isLockedDefault)}`}>{cell.odds.toFixed(1)}x</span>
           </div>
         );
       })}

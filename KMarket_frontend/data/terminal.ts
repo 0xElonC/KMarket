@@ -16,7 +16,15 @@ export const forexAssets = [
   { symbol: 'AUD', name: 'Aus Dollar', price: 0.65, change: '+0.3%' }
 ];
 
-export const historyItems = [
+export const historyItems: Array<{
+  id: string;
+  symbol: string;
+  entry: string;
+  rangeKey: string;
+  odds: string;
+  payout: string;
+  tone: 'win' | 'loss' | 'live';
+}> = [
   {
     id: 'btc',
     symbol: 'BTC/USD',

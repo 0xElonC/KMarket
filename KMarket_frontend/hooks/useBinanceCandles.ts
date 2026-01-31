@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CandleData } from '../types';
+import { CandleData, PricePoint } from '../types';
 
 interface UseBinanceCandlesOptions {
   symbol: string; // e.g. ETHUSDT
@@ -10,6 +10,7 @@ interface UseBinanceCandlesOptions {
 
 const DEFAULT_LIMIT = 60;
 const UPDATE_TICK_MS = 100;
+const MAX_PRICE_POINTS = 500; // K项目风格：保留最多500个价格点
 
 const formatTime = (timestamp: number) =>
   new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -41,6 +42,8 @@ export function useBinanceCandles({
   enabled = true
 }: UseBinanceCandlesOptions) {
   const [chartData, setChartData] = useState<CandleData[]>([]);
+  const [priceData, setPriceData] = useState<PricePoint[]>([]); // K项目风格：实时价格点流
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null); // 当前价格
   const [error, setError] = useState<string | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   const lastOpenTimeRef = useRef<number | null>(null);
@@ -70,6 +73,8 @@ export function useBinanceCandles({
     lastFinalOpenTimeRef.current = null;
     setUpdateCount(0);
     setChartData([]);
+    setPriceData([]);
+    setCurrentPrice(null);
   }, [symbol, interval]);
 
   useEffect(() => {
@@ -153,6 +158,15 @@ export function useBinanceCandles({
 
         const eventTime = data.E ?? Date.now();
         const { t: openTime, o, c, h, l, v, x: isFinal } = data.k;
+        const closePrice = Number(c);
+
+        // K项目风格：收集实时价格点用于绘制流动曲线
+        setCurrentPrice(closePrice);
+        setPriceData((prev) => {
+          const newPoint: PricePoint = { time: eventTime, price: closePrice };
+          const next = [...prev, newPoint];
+          return next.slice(-MAX_PRICE_POINTS);
+        });
 
         setChartData((prev) => {
           if (!prev.length) {
@@ -237,5 +251,5 @@ export function useBinanceCandles({
     return () => window.clearInterval(intervalId);
   }, [enabled, intervalMs]);
 
-  return { chartData, error, updateCount };
+  return { chartData, priceData, currentPrice, error, updateCount };
 }

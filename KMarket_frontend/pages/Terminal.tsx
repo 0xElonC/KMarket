@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { PredictionChart } from '../components/PredictionChart';
 import { BetCell, BetType } from '../types';
-import { CANDLES_PER_GRID, NOW_LINE_RATIO } from '../utils/chartConfig';
+import { CANDLES_PER_GRID } from '../utils/chartConfig';
 import { HistoryPanel } from '../components/terminal/HistoryPanel';
 import { ChartToolbar } from '../components/terminal/ChartToolbar';
 import { useBettingGrid } from '../hooks/useBettingGrid';
@@ -14,6 +14,9 @@ import {
   forexAssets,
   historyItems,
 } from '../data/terminal';
+
+// K项目风格：中心价格线（结算线）在40%位置
+const CENTER_LINE_RATIO = 0.4;
 
 
 const GRID_ROWS = 6;
@@ -63,23 +66,45 @@ export default function Terminal({
     });
   }, [defaultSymbol, selectedAsset]);
   const [activeTimeframe, setActiveTimeframe] = useState('1H');
-  const [mockUpdateCount, setMockUpdateCount] = useState(0); // K线更新计数，驱动网格滚动
+  const [mockUpdateCount, setMockUpdateCount] = useState(0); // K项目风格：由滚动驱动
   const [betAmount, setBetAmount] = useState(50);
   const [panOffset, setPanOffset] = useState(0);
   const [isDemoMode, setIsDemoMode] = useState(true); // 演示模式开关，默认开启
   const isEthSymbol = activeSymbol.symbol === 'ETH';
-  const { chartData: liveChartData, updateCount: liveUpdateCount } = useBinanceCandles({
+
+  // K项目风格：滚动驱动 updateCount（替代定时器）
+  const handleScrollTick = useCallback((uc: number) => {
+    setMockUpdateCount(uc);
+  }, []);
+
+  // K项目风格：获取实时价格数据流
+  const {
+    chartData: liveChartData,
+    priceData: livePriceData,
+    currentPrice: liveCurrentPrice,
+    updateCount: liveUpdateCount
+  } = useBinanceCandles({
     symbol: 'ETHUSDT',
     interval: '1m',
     enabled: isEthSymbol && !isDemoMode
   });
+
   const { chartData: mockChartData } = useMockCandles({
     basePrice: activeSymbol.price,
+    updateCount: mockUpdateCount,
     enabled: !isEthSymbol || liveChartData.length === 0 || isDemoMode
   });
+
   const isLiveReady = isEthSymbol && liveChartData.length > 0 && !isDemoMode;
   const chartData = isLiveReady ? liveChartData : mockChartData;
   const updateCount = isLiveReady ? liveUpdateCount : mockUpdateCount;
+
+  // DEMO 模式：currentPrice 直接取 mock K线最后一根的 close
+  const mockCurrentPrice = mockChartData.length > 0
+    ? mockChartData[mockChartData.length - 1].close
+    : null;
+  const currentPrice = isLiveReady ? liveCurrentPrice : mockCurrentPrice;
+  const priceData = isLiveReady ? livePriceData : [];
   const { bettingCells, setBettingCells } = useBettingGrid({
     updateCount,
     initialCols: INITIAL_GRID_COLS,
@@ -97,22 +122,14 @@ export default function Terminal({
     betType: BetType;
   }>>([]);
 
-  // Effect: 动态更新K线 - 每2秒生成新K线，模拟实时走势
-  useEffect(() => {
-    if (isLiveReady) return;
-    const interval = setInterval(() => {
-      // 递增更新计数，驱动网格滚动
-      setMockUpdateCount(prev => prev + 1);
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [activeSymbol, isLiveReady, isDemoMode]);
+  // K项目风格：updateCount 由 PredictionChart 的 onScrollTick 驱动，无需定时器
 
   // Effect: 自动新增预测网格列逻辑已抽离到 useBettingGrid
 
-  // Effect: 自动判定下注结果
+  // Effect: 自动判定下注结果 - K项目风格：使用实时价格
   useBetResolution({
     chartData,
+    currentPrice,
     updateCount,
     activeBets,
     setActiveBets,
@@ -132,7 +149,7 @@ export default function Terminal({
     low: t.terminal.rangeLow
   };
 
-  // 下注处理 - 供同伴对接
+  // 下注处理 - K项目风格：双击下注
   const handleBet = (cellId: string, amount: number) => {
     // 解析cellId获取row和col（支持负数行）
     const match = cellId.match(/^(-?\d+)-(-?\d+)$/);
@@ -145,12 +162,11 @@ export default function Terminal({
     if (!cell) return;
     const betType = cell.betType;
 
-    // 计算到达NOW线需要的updateCount
-    // NOW线在1/3处，且网格会随updateCount向左移动
-    const nowLineCol = VISIBLE_COLS * NOW_LINE_RATIO;
-    const currentNowCol = nowLineCol + updateCount / CANDLES_PER_GRID;
-    const colsToNowLine = col - currentNowCol;
-    const updateCountsToWait = Math.round(colsToNowLine * CANDLES_PER_GRID);
+    // K项目风格：计算到达中心价格线需要的updateCount
+    const centerLineCol = VISIBLE_COLS * CENTER_LINE_RATIO;
+    const currentCenterCol = centerLineCol + updateCount / CANDLES_PER_GRID;
+    const colsToCenterLine = col - currentCenterCol;
+    const updateCountsToWait = Math.round(colsToCenterLine * CANDLES_PER_GRID);
     const targetUpdateCount = updateCount + updateCountsToWait;
 
     console.log('🎲 下注成功！', {
@@ -174,11 +190,11 @@ export default function Terminal({
       betType
     }]);
 
-    // 更新格子状态为selected
+    // 更新格子状态为selected (K项目风格：active)
     setBettingCells(prev => prev.map(c => {
       if (c.id !== cellId) return c;
       if (c.status !== 'default') return c;
-      return { ...c, status: 'selected' };
+      return { ...c, status: 'selected', betTime: Date.now() };
     }));
   };
 
@@ -219,6 +235,8 @@ export default function Terminal({
     <div className="flex-1 neu-in relative overflow-hidden rounded-xl border border-white/5 bg-[#10151e] m-1 min-h-0">
                 <PredictionChart
                     candleData={chartData}
+                    priceData={priceData}
+                    currentPrice={currentPrice}
                     bettingCells={bettingCells}
                     onBet={handleBet}
                     gridRows={GRID_ROWS}
@@ -226,6 +244,7 @@ export default function Terminal({
                     visibleCols={VISIBLE_COLS}
                     updateCount={updateCount}
                     onPanChange={setPanOffset}
+                    onScrollTick={handleScrollTick}
                 />
             </div>
       </section>

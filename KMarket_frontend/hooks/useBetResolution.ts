@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BetCell, BetType, CandleData } from '../types';
-import { computePriceDomain } from '../utils/chartConfig';
+import { computePriceDomain, FLOW_CONFIG } from '../utils/chartConfig';
 
 interface ActiveBet {
   cellId: string;
@@ -13,6 +13,8 @@ interface ActiveBet {
 
 interface UseBetResolutionOptions {
   chartData: CandleData[];
+  currentPrice?: number | null; // K项目风格：实时价格
+  basePrice?: number | null;    // K项目风格：基准价格
   updateCount: number;
   activeBets: ActiveBet[];
   setActiveBets: React.Dispatch<React.SetStateAction<ActiveBet[]>>;
@@ -24,6 +26,8 @@ interface UseBetResolutionOptions {
 
 export function useBetResolution({
   chartData,
+  currentPrice,
+  basePrice,
   updateCount,
   activeBets,
   setActiveBets,
@@ -36,20 +40,36 @@ export function useBetResolution({
   const processedBetsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    if (activeBets.length === 0 || chartData.length === 0) return;
+    if (activeBets.length === 0) return;
+
+    // K项目风格：优先使用实时价格
+    const price = currentPrice ?? (chartData.length > 0 ? chartData[chartData.length - 1].close : null);
+    if (price === null) return;
 
     const betsToJudge = activeBets.filter(
       bet => updateCount >= bet.targetUpdateCount && !processedBetsRef.current.has(bet.cellId)
     );
     if (betsToJudge.length === 0) return;
 
-    const currentClose = chartData[chartData.length - 1].close;
+    // K项目风格：基于 basePrice ± PRICE_RANGE 计算价格范围
+    let effectiveMax: number;
+    let effectiveMin: number;
+    let rowValue: number;
 
-    const priceDomain = computePriceDomain(chartData);
-    const baseRange = priceDomain.max - priceDomain.min || 1;
-    const effectiveMax = priceDomain.max;
-    const effectiveMin = priceDomain.min;
-    const rowValue = baseRange / gridRows;
+    if (basePrice !== null && basePrice !== undefined) {
+      // K项目风格价格范围
+      const range = basePrice * (FLOW_CONFIG.PRICE_RANGE / 100) * 2;
+      effectiveMax = basePrice + range / 2;
+      effectiveMin = basePrice - range / 2;
+      rowValue = range / gridRows;
+    } else {
+      // 降级到原有的 candleData 计算方式
+      const priceDomain = computePriceDomain(chartData);
+      const baseRange = priceDomain.max - priceDomain.min || 1;
+      effectiveMax = priceDomain.max;
+      effectiveMin = priceDomain.min;
+      rowValue = baseRange / gridRows;
+    }
 
     // 标记为已处理
     betsToJudge.forEach(bet => {
@@ -57,28 +77,34 @@ export function useBetResolution({
     });
 
     // 构建状态映射
-    // 判定规则：
-    // - High（买升）：当前价格 > 格子底部价格 = 赢
-    // - Low（买跌）：当前价格 < 格子顶部价格 = 赢
+    // K项目风格判定规则：
+    // - 价格在格子的价格区间内 = 赢
+    // - 价格不在区间内 = 输
     const statusById = new Map<string, 'win' | 'fail'>();
     betsToJudge.forEach(bet => {
       // 计算格子的价格边界
-      // row 越小价格越高，所以：
-      // 格子顶部价格 = effectiveMax - row * rowValue
-      // 格子底部价格 = effectiveMax - (row + 1) * rowValue
+      // row 越小价格越高
       const cellTopPrice = effectiveMax - (bet.row - gridRowStart) * rowValue;
       const cellBottomPrice = effectiveMax - (bet.row - gridRowStart + 1) * rowValue;
 
       let isWin: boolean;
       if (bet.betType === 'high') {
         // 买升：当前价格 > 格子底部价格 = 赢
-        isWin = currentClose > cellBottomPrice;
+        isWin = price > cellBottomPrice;
       } else {
         // 买跌：当前价格 < 格子顶部价格 = 赢
-        isWin = currentClose < cellTopPrice;
+        isWin = price < cellTopPrice;
       }
 
       statusById.set(bet.cellId, isWin ? 'win' : 'fail');
+
+      // K项目风格：输出结算日志
+      console.log(isWin ? '🎉 赢了！' : '💔 输了', {
+        cellId: bet.cellId,
+        betType: bet.betType,
+        currentPrice: price.toFixed(2),
+        cellPriceRange: `${cellBottomPrice.toFixed(2)} - ${cellTopPrice.toFixed(2)}`
+      });
     });
 
     // 使用函数式更新，确保基于最新状态
@@ -98,6 +124,8 @@ export function useBetResolution({
   }, [
     activeBets,
     chartData,
+    currentPrice,
+    basePrice,
     gridRowStart,
     gridRows,
     gridTotalRows,

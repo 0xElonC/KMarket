@@ -3,8 +3,24 @@ import { CandleData } from '../types';
 // Shared chart/grid config
 export const CANDLES_PER_GRID = 6;
 export const DEFAULT_VISIBLE_COLS = 9;
-export const NOW_LINE_RATIO = 1 / 2;
-export const LOCK_LINE_RATIO = 3 / 4;
+export const NOW_LINE_RATIO = 0.4;
+export const LOCK_LINE_RATIO = 0.67;
+
+// K项目风格配置 - 流动价格曲线
+export const FLOW_CONFIG = {
+  SPEED: 12,              // 格子移动速度 px/s（K项目风格：恒定速度）
+  PRICE_RANGE: 5,         // Y轴价格范围 ±5%
+  CENTER_LINE_RATIO: 0.4, // 中心价格线位置（屏幕40%）
+  PRICE_SMOOTH: 0.1,      // 价格平滑缓动因子
+  BASE_PRICE_SMOOTH: 0.0005, // 基准价格跟随因子
+  LINE_GLOW_COLOR: 'rgba(0,212,255,0.6)', // 价格线发光颜色
+  LINE_COLOR: '#00d4ff',  // 价格线颜色
+  LINE_WIDTH: 3,          // 价格线宽度
+  GLOW_BLUR: 15,          // 发光模糊半径
+  HEAD_GLOW_COLOR: '#00ff88', // 头部发光点颜色
+  HEAD_GLOW_BLUR: 25,     // 头部发光模糊
+  HEAD_RADIUS: 6,         // 头部圆点半径
+};
 
 // Price-domain calculation params (fixed height + centered)
 const PRICE_WINDOW = 40;

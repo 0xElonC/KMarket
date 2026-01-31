@@ -38,8 +38,15 @@ export interface CandleData {
   volume?: number;
 }
 
+// 实时价格点 - K项目风格的流动价格曲线数据
+export interface PricePoint {
+  time: number;    // 时间戳 (ms)
+  price: number;   // 实时价格
+}
+
 // 投注单元格状态
-export type BetCellStatus = 'default' | 'selected' | 'win' | 'fail' | 'dissolved';
+// K项目风格: idle(可下注) -> active(已下注) -> won/lost(结算)
+export type BetCellStatus = 'default' | 'selected' | 'win' | 'fail' | 'dissolved' | 'idle' | 'active' | 'won' | 'lost';
 
 // 投注类型：买升或买跌
 export type BetType = 'high' | 'low';
@@ -53,6 +60,11 @@ export interface BetCell {
   odds: number;       // 赔率
   status: BetCellStatus;
   betType: BetType;   // 买升或买跌
+  // K项目风格新增字段
+  x?: number;         // 格子当前X坐标 (px)
+  priceHigh?: number; // 格子对应的价格上限
+  priceLow?: number;  // 格子对应的价格下限
+  betTime?: number;   // 下注时间戳
 }
 
 // 投注网格配置
