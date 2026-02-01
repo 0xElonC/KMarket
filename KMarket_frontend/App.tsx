@@ -6,6 +6,7 @@ import Markets from './pages/Markets';
 import Dashboard from './pages/Dashboard';
 import { ConfirmModal } from './components/ConfirmModal';
 import { GameStateProvider } from './contexts/GameStateContext';
+import './utils/clearHistory'; // Enable debug commands in console
 
 const loadTerminal = () => import('./pages/Terminal');
 const Terminal = React.lazy(loadTerminal);

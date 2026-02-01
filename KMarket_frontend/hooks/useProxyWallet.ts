@@ -99,6 +99,16 @@ export function useProxyWallet(autoCreate: boolean = true): ProxyWalletState & {
     },
   });
 
+  // Log balance data
+  useEffect(() => {
+    console.log('💰 useProxyWallet Balance:', {
+      proxyAddress,
+      depositBalanceRaw: depositBalanceRaw?.toString(),
+      hasProxy,
+      isLoadingBalance
+    });
+  }, [proxyAddress, depositBalanceRaw, hasProxy, isLoadingBalance]);
+
   // Create proxy wallet
   const { writeContractAsync } = useWriteContract();
 

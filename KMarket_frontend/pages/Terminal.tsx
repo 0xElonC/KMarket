@@ -125,11 +125,6 @@ export default function Terminal({
               </span>
             </div>
             <div className="flex items-center gap-4">
-              {isConnected && (
-                <span className="text-[#ffd700]">
-                  可用余额: ${parseFloat(onChainBalance).toFixed(2)}
-                </span>
-              )}
               <span className="text-gray-500">
                 双击格子下注 | 格子向左移动 | 价格线碰到格子区间即赢
               </span>
@@ -139,7 +134,6 @@ export default function Terminal({
 
         {/* Right: History Panel */}
         <HistoryPanel
-          items={historyItems}
           rangeLabels={rangeLabels}
           labels={{
             title: t.terminal.history,

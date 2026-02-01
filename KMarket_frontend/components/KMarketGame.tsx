@@ -2,10 +2,11 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { createPublicClient, http, formatUnits } from 'viem';
 import { localhost } from 'viem/chains';
 import { useGameState } from '../contexts/GameStateContext';
+import { addTransaction, removeTransaction } from '../utils/transactionHistory';
 
 // Contract addresses (localhost)
 const CONTRACT_ADDRESSES = {
-  vault: '0x3Aa5ebB10DC797CAC828524e59A333d0A371443c' as `0x${string}`,
+  vault: '0x610178dA211FEF7D417bC0e6FeD39F05609AD788' as `0x${string}`,
 };
 
 // ABIs
@@ -31,8 +32,8 @@ const VAULT_ABI = [
 
 // 配置
 const CFG = {
-  ROWS: 20,
-  COLS: 20,
+  ROWS: 40,
+  COLS: 40,
   CELL_W: 65,
   CELL_H: 36,
   SPEED: 30,
@@ -83,6 +84,7 @@ interface GridCell {
   odds: number;
   status: 'idle' | 'active' | 'won' | 'lost';
   betTime: number | null;
+  betTransactionId?: string; // ID of the bet transaction
 }
 
 interface FloatText {
@@ -171,21 +173,32 @@ export function KMarketGame({ userAddress, onBalanceChange, onPriceChange }: KMa
       const savedVirtual = getVirtualBalance(userAddress);
       const lastSynced = lastSyncedBalanceRef.current;
       
-      // 如果链上余额增加了（用户充值了），更新虚拟余额
-      if (chainBalance > lastSynced && lastSynced > 0) {
+      // 首次加载（lastSynced 还是 0）
+      if (lastSynced === 0) {
+        if (savedVirtual > 0) {
+          // 有保存的虚拟余额，使用它
+          console.log(`🔄 Restored virtual balance: ${savedVirtual.toFixed(2)} USDC`);
+          setVirtualBalance(savedVirtual);
+          onBalanceChange?.(savedVirtual.toFixed(2));
+        } else if (chainBalance > 0) {
+          // 没有保存的虚拟余额，用链上余额初始化
+          console.log(`🔄 Initializing virtual balance from chain: ${chainBalance.toFixed(2)} USDC`);
+          setVirtualBalance(chainBalance);
+          saveVirtualBalance(userAddress, chainBalance);
+          onBalanceChange?.(chainBalance.toFixed(2));
+        } else {
+          onBalanceChange?.('0.00');
+        }
+      } else if (chainBalance > lastSynced) {
+        // 检测到充值（链上余额增加了）
         const deposit = chainBalance - lastSynced;
         const newVirtual = savedVirtual + deposit;
         console.log(`💰 Detected deposit: +${deposit.toFixed(2)} USDC, virtual: ${savedVirtual.toFixed(2)} → ${newVirtual.toFixed(2)}`);
         setVirtualBalance(newVirtual);
         saveVirtualBalance(userAddress, newVirtual);
         onBalanceChange?.(newVirtual.toFixed(2));
-      } else if (savedVirtual === 0 && chainBalance > 0) {
-        // 首次加载，用链上余额初始化虚拟余额
-        console.log(`🔄 Initializing virtual balance: ${chainBalance.toFixed(2)} USDC`);
-        setVirtualBalance(chainBalance);
-        saveVirtualBalance(userAddress, chainBalance);
-        onBalanceChange?.(chainBalance.toFixed(2));
       } else {
+        // 正常情况，使用保存的虚拟余额
         setVirtualBalance(savedVirtual);
         onBalanceChange?.(savedVirtual.toFixed(2));
       }
@@ -316,12 +329,32 @@ export function KMarketGame({ userAddress, onBalanceChange, onPriceChange }: KMa
       }
       cell.status = 'active';
       cell.betTime = Date.now();
+      
       // Deduct bet amount from virtual balance
+      const newBalance = virtualBalance - CFG.BET_AMOUNT;
       updateVirtualBalance(-CFG.BET_AMOUNT);
+      
+      // Record bet transaction and save its ID to cell
+      if (userAddress) {
+        const betTx = addTransaction(
+          userAddress,
+          'bet',
+          CFG.BET_AMOUNT,
+          `Bet on ${cell.priceLow.toFixed(2)}-${cell.priceHigh.toFixed(2)}`,
+          newBalance,
+          {
+            odds: cell.odds,
+            priceRange: `${cell.priceLow.toFixed(2)}-${cell.priceHigh.toFixed(2)}`,
+            asset: 'ETH'
+          }
+        );
+        cell.betTransactionId = betTx.id; // Save transaction ID to cell
+      }
+      
       setActiveBets(gridCellsRef.current.filter(c => c.status === 'active').length);
       console.log('🎲 Bet placed:', { row: cell.row, col: cell.col, odds: cell.odds, priceRange: `${cell.priceLow.toFixed(2)} - ${cell.priceHigh.toFixed(2)}` });
     }
-  }, [getCellAt, virtualBalance, isCellBettable, updateVirtualBalance]);
+  }, [getCellAt, virtualBalance, isCellBettable, updateVirtualBalance, userAddress]);
 
   // Handle mouse move (hover)
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -491,7 +524,29 @@ export function KMarketGame({ userAddress, onBalanceChange, onPriceChange }: KMa
               cell.status = 'won';
               const win = CFG.BET_AMOUNT * cell.odds;
               // Add winnings to virtual balance (bet was already deducted)
+              const newBalance = virtualBalance + win;
               updateVirtualBalance(win);
+              
+              // Remove the original bet transaction and record win
+              if (userAddress) {
+                if (cell.betTransactionId) {
+                  removeTransaction(userAddress, cell.betTransactionId);
+                }
+                addTransaction(
+                  userAddress,
+                  'win',
+                  win,
+                  `Won ${win.toFixed(2)} USDC`,
+                  newBalance,
+                  {
+                    odds: cell.odds,
+                    payout: win,
+                    priceRange: `${cell.priceLow.toFixed(2)}-${cell.priceHigh.toFixed(2)}`,
+                    asset: 'ETH'
+                  }
+                );
+              }
+              
               const y = getCellY(cell);
               addFloat('+$' + win.toFixed(2), cell.x + cell.w / 2, y, '#00ff88', true);
               setActiveBets(gridCellsRef.current.filter(c => c.status === 'active').length);
@@ -501,6 +556,25 @@ export function KMarketGame({ userAddress, onBalanceChange, onPriceChange }: KMa
 
           if (cell.x + cell.w < lineX && cell.status === 'active') {
             cell.status = 'lost';
+            
+            // Remove the original bet transaction and record loss
+            if (userAddress) {
+              if (cell.betTransactionId) {
+                removeTransaction(userAddress, cell.betTransactionId);
+              }
+              addTransaction(
+                userAddress,
+                'loss',
+                CFG.BET_AMOUNT,
+                `Lost ${CFG.BET_AMOUNT.toFixed(2)} USDC`,
+                virtualBalance, // Balance already deducted when bet was placed
+                {
+                  priceRange: `${cell.priceLow.toFixed(2)}-${cell.priceHigh.toFixed(2)}`,
+                  asset: 'ETH'
+                }
+              );
+            }
+            
             const y = getCellY(cell);
             addFloat('-$' + CFG.BET_AMOUNT.toFixed(2), lineX, y + cell.h / 2, '#ff4757', false);
             setActiveBets(gridCellsRef.current.filter(c => c.status === 'active').length);
@@ -755,9 +829,6 @@ export function KMarketGame({ userAddress, onBalanceChange, onPriceChange }: KMa
       <div className="absolute bottom-3 right-3 flex items-center gap-4 text-xs">
         <span className="text-gray-400">活跃: <span className="text-[#00d4ff]">{activeBets}</span></span>
         <span className="text-[#ffd700]">可用余额: ${virtualBalance.toFixed(2)}</span>
-        {userAddress && (
-          <span className="text-gray-500">链上: ${parseFloat(onChainBalance).toFixed(2)}</span>
-        )}
       </div>
 
       {/* Instructions */}

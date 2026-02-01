@@ -37,10 +37,10 @@ export const CONTRACT_ADDRESSES = {
   },
   // Localhost/Hardhat
   [localhost.id]: {
-    usdc: '0x68B1D87F95878fE05B998F19b66F4baba5De1aed' as `0x${string}`,
-    vault: '0x3Aa5ebB10DC797CAC828524e59A333d0A371443c' as `0x${string}`,
-    tradingEngine: '0xc6e7DF5E7b4f2A278906862b61205850344D4e7d' as `0x${string}`,
-    proxyWalletFactory: '0x59b670e9fA9D0A427751Af201D676719a970857b' as `0x${string}`,
+    usdc: '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318' as `0x${string}`,
+    vault: '0x610178dA211FEF7D417bC0e6FeD39F05609AD788' as `0x${string}`,
+    tradingEngine: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e' as `0x${string}`,
+    proxyWalletFactory: '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0' as `0x${string}`,
   },
 } as const;
 

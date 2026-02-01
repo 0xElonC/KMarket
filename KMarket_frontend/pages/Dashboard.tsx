@@ -12,6 +12,7 @@ import { TransactionHistorySection } from '../components/dashboard/TransactionHi
 import { AnalyticsSection } from '../components/dashboard/AnalyticsSection';
 import { AccountSection } from '../components/dashboard/AccountSection';
 import DepositWithdrawModal from '../components/DepositWithdrawModal';
+import { addTransaction } from '../utils/transactionHistory';
 
 type DashboardSection = 'overview' | 'portfolio' | 'transactions' | 'analytics' | 'account';
 type LanguageData = ReturnType<typeof useLanguage>['t'];
@@ -72,15 +73,30 @@ export default function Dashboard({
     if (address) {
       const saved = getVirtualBalance(address);
       const chainBalance = parseFloat(depositBalance) || 0;
-      // If no virtual balance saved but has chain balance, initialize with chain balance
+      
+      console.log('📊 Dashboard Balance Check:', {
+        address,
+        saved,
+        chainBalance,
+        depositBalance,
+        hasProxy
+      });
+      
+      // 如果没有保存的虚拟余额，用链上余额初始化
       if (saved === 0 && chainBalance > 0) {
+        console.log(`🔄 Dashboard: Initializing virtual balance from chain: ${chainBalance.toFixed(2)}`);
         setVirtualBalance(chainBalance);
         saveVirtualBalance(address, chainBalance);
-      } else {
+      } else if (saved > 0) {
+        console.log(`✅ Dashboard: Using saved virtual balance: ${saved.toFixed(2)}`);
         setVirtualBalance(saved);
+      } else {
+        // 都是 0，等待链上数据
+        console.log('⏳ Dashboard: Waiting for chain data...');
+        setVirtualBalance(chainBalance);
       }
     }
-  }, [address, depositBalance]);
+  }, [address, depositBalance, hasProxy]);
 
   useEffect(() => {
     if (!initialSection) return;
@@ -123,6 +139,18 @@ export default function Dashboard({
         ? prev + amountNum 
         : Math.max(0, prev - amountNum);
       saveVirtualBalance(address, newBalance);
+      
+      // Record transaction
+      addTransaction(
+        address,
+        mode,
+        amountNum,
+        mode === 'deposit' 
+          ? `Deposited ${amount} USDC` 
+          : `Withdrew ${amount} USDC`,
+        newBalance
+      );
+      
       console.log(`📊 Virtual balance updated: ${prev.toFixed(2)} → ${newBalance.toFixed(2)} (${mode}: ${amount})`);
       return newBalance;
     });
