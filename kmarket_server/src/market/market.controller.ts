@@ -1,44 +1,64 @@
-import { Controller, Get, Query } from '@nestjs/common';
-import { PriceStoreService, KLineData, PriceData } from './services/price-store.service';
-import { BlockManagerService } from './services/block-manager.service';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { GateWsService, KLineData, PriceData } from './services/gate-ws.service';
+import { GridManagerService } from './services/grid-manager.service';
+import { MarketConfigService, MarketConfig } from './services/market-config.service';
 import { ApiResponse } from '../common/dto';
-import { ColumnGridResponseDto, GridResponseDto } from './dto/grid.dto';
+import { WsGridCell } from './dto/websocket.dto';
 
 @Controller('market')
 export class MarketController {
     constructor(
-        private readonly priceStoreService: PriceStoreService,
-        private readonly blockManagerService: BlockManagerService,
+        private readonly gateWsService: GateWsService,
+        private readonly gridManagerService: GridManagerService,
+        private readonly configService: MarketConfigService,
     ) { }
 
-    @Get('price')
-    getCurrentPrice(@Query('symbol') symbol: string = 'ETHUSDT'): ApiResponse<PriceData | null> {
-        const price = this.priceStoreService.getCurrentPrice(symbol);
+    /**
+     * 获取市场配置
+     */
+    @Get(':symbol/config')
+    getConfig(@Param('symbol') symbol: string): ApiResponse<MarketConfig | null> {
+        const config = this.configService.getConfig(symbol);
+        return ApiResponse.success(config);
+    }
+
+    /**
+     * 获取当前价格
+     */
+    @Get(':symbol/price')
+    getCurrentPrice(@Param('symbol') symbol: string): ApiResponse<PriceData | null> {
+        const price = this.gateWsService.getCurrentPrice(symbol);
         return ApiResponse.success(price);
     }
 
-    @Get('kline')
+    /**
+     * 获取K线历史
+     */
+    @Get(':symbol/kline')
     async getKline(
-        @Query('symbol') symbol: string = 'ETHUSDT',
-        @Query('startTime') startTime?: string,
-        @Query('endTime') endTime?: string,
+        @Param('symbol') symbol: string,
+        @Query('limit') limit?: string,
     ): Promise<ApiResponse<KLineData[]>> {
-        const start = startTime ? parseInt(startTime) : Date.now() - 3600000;
-        const end = endTime ? parseInt(endTime) : Date.now();
-
-        const klines = await this.priceStoreService.getKLineHistory(symbol, start, end);
+        const klines = this.gateWsService.getKlineHistory(symbol, parseInt(limit || '100'));
         return ApiResponse.success(klines);
     }
 
     /**
-     * 获取 6×6 下注网格
-     * - 6 列: 时间维度 (3s 间隔)
-     * - 6 行: 价格区间 (大涨/中涨/小涨/小跌/中跌/大跌)
-     * - 前 2 列锁定，后 4 列可下注
+     * 获取初始网格 (备用 REST 接口，推荐使用 WebSocket)
      */
-    @Get('grid')
-    async getGrid(@Query('symbol') symbol: string = 'ETHUSDT'): Promise<ApiResponse<ColumnGridResponseDto>> {
-        const gridData = await this.blockManagerService.getColumnGrid();
-        return ApiResponse.success(gridData);
+    @Get(':symbol/grid/init')
+    getInitGrid(@Param('symbol') symbol: string): ApiResponse<{ cells: WsGridCell[]; basePrice: number }> {
+        const cells = this.gridManagerService.initGrid(symbol);
+        const basePrice = this.gridManagerService.getCurrentPrice(symbol);
+        return ApiResponse.success({ cells, basePrice });
+    }
+
+    /**
+     * 获取支持的交易对
+     */
+    @Get('symbols')
+    getSymbols(): ApiResponse<string[]> {
+        const symbols = this.configService.getAllSymbols();
+        return ApiResponse.success(symbols);
     }
 }

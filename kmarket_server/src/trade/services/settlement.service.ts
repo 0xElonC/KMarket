@@ -6,7 +6,9 @@ import { Bet, BetStatus } from '../entities/bet.entity';
 import { UsersService } from '../../users/users.service';
 import { OddsCalculatorService } from '../../market/services/odds-calculator.service';
 import { BetService } from './bet.service';
-import { BlockManagerService } from '../../market/services/block-manager.service';
+import { GridManagerService } from '../../market/services/grid-manager.service';
+import { MarketGateway } from '../../market/market.gateway';
+import { MarketConfigService } from '../../market/services/market-config.service';
 
 @Injectable()
 export class SettlementService {
@@ -19,7 +21,9 @@ export class SettlementService {
         private readonly betService: BetService,
         private readonly usersService: UsersService,
         private readonly oddsCalculatorService: OddsCalculatorService,
-        private readonly blockManagerService: BlockManagerService,
+        private readonly gridManagerService: GridManagerService,
+        private readonly marketGateway: MarketGateway,
+        private readonly configService: MarketConfigService,
     ) { }
 
     /**
@@ -70,7 +74,12 @@ export class SettlementService {
             const priceChangePercent = ((exitPrice - basisPrice) / basisPrice) * 100;
 
             // 判断中奖行
-            const winningRow = this.blockManagerService.getWinningRow(priceChangePercent);
+            const config = this.configService.getConfig(bet.symbol);
+            if (!config) {
+                this.logger.error(`No config for symbol ${bet.symbol}`);
+                return;
+            }
+            const winningRow = this.gridManagerService.getWinningRow(priceChangePercent, config);
 
             // 判定输赢: 用户下注的行 == 中奖行
             const isWin = bet.rowIndex === (winningRow + 1); // winningRow 是 0-based, rowIndex 是 1-based
@@ -104,8 +113,17 @@ export class SettlementService {
 
             await this.betRepository.save(bet);
 
-            // 记录结算结果到 BlockManager (用于 API 显示)
-            this.blockManagerService.recordSettlement(
+            // 推送结算结果到前端
+            this.marketGateway.emitCellSettle(bet.symbol, {
+                cellId: bet.tickId,
+                tickId: bet.tickId,
+                result: isWin ? 'won' : 'lost',
+                settlePrice: exitPrice,
+                payout: bet.payout,
+            });
+
+            // 记录结算结果
+            this.gridManagerService.recordSettlement(
                 bet.settlementTime.getTime(),
                 exitPrice.toString(),
                 bet.basisPrice,

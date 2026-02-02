@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Bet, BetStatus } from '../entities/bet.entity';
 import { CreateBetDto, BetResponseDto, PositionDto, PositionsResponseDto, HistoryResponseDto, HistorySummaryDto } from '../dto/bet.dto';
 import { UsersService } from '../../users/users.service';
-import { BlockManagerService } from '../../market/services/block-manager.service';
+import { GridManagerService } from '../../market/services/grid-manager.service';
 import { TransactionType } from '../../users/entities/transaction.entity';
 
 // 价格区间标签
@@ -18,7 +18,7 @@ export class BetService {
         @InjectRepository(Bet)
         private readonly betRepository: Repository<Bet>,
         private readonly usersService: UsersService,
-        private readonly blockManagerService: BlockManagerService,
+        private readonly gridManagerService: GridManagerService,
     ) { }
 
     /**
@@ -26,7 +26,7 @@ export class BetService {
      */
     async placeBet(userId: number, dto: CreateBetDto): Promise<BetResponseDto> {
         // 1. 用 tickId 从 Redis 获取区块数据
-        const columnData = await this.blockManagerService.getColumnByTickId(dto.tickId);
+        const columnData = await this.gridManagerService.getColumnByTickId(dto.tickId);
 
         // 取不到 或 已过期 统一提示
         if (!columnData || columnData.expiryTime <= Date.now()) {
