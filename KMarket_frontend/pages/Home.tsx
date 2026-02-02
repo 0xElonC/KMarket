@@ -39,7 +39,10 @@ export default function Home({ onNavigate }: { onNavigate: (page: Page) => void 
                     {t.home.start}
                     <ArrowRight size={20} />
                 </NeuButton>
-                <button className="px-8 py-4 rounded-2xl font-bold text-gray-400 hover:text-gray-100 transition-colors flex items-center gap-2">
+                <button 
+                  onClick={() => onNavigate(Page.HOW_IT_WORKS)}
+                  className="px-8 py-4 rounded-2xl font-bold text-gray-400 hover:text-gray-100 transition-colors flex items-center gap-2"
+                >
                     <PlayCircle size={20} />
                     {t.home.how}
                 </button>

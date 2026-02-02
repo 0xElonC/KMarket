@@ -4,6 +4,7 @@ import Header from './components/Header';
 import Home from './pages/Home';
 import Markets from './pages/Markets';
 import Dashboard from './pages/Dashboard';
+import HowItWorks from './pages/HowItWorks';
 import { ConfirmModal } from './components/ConfirmModal';
 import { GameStateProvider } from './contexts/GameStateContext';
 import './utils/clearHistory'; // Enable debug commands in console
@@ -65,6 +66,8 @@ export default function App() {
             onSectionConsumed={() => setDashboardSection(null)}
           />
         );
+      case Page.HOW_IT_WORKS:
+        return <HowItWorks onNavigate={handleNavigate} />;
       default:
         return <Home onNavigate={handleNavigate} />;
     }

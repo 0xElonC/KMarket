@@ -3,6 +3,22 @@ import { Page } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { AssetCard } from '../components/AssetCard';
 import { useGateMarkets, MarketAsset } from '../hooks/useGateMarkets';
+import { allEventAssets, EventAsset } from '../data/events';
+
+// Convert EventAsset to MarketAsset format
+const convertEventToMarket = (event: EventAsset): MarketAsset => ({
+  id: event.id,
+  symbol: event.symbol,
+  name: event.name,
+  price: event.price,
+  change: event.change,
+  color: event.color,
+  category: event.category,
+  data: event.data,
+  volume: event.volume,
+  high24h: event.high24h,
+  low24h: event.low24h
+});
 
 // Fallback mock data (used when no live data yet)
 const fallbackAssets: MarketAsset[] = [
@@ -23,8 +39,10 @@ export default function Markets({
   const [favorites, setFavorites] = useState<string[]>(['BTC']); // BTC favorited by default
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Use live assets if available, otherwise fallback
-  const assets = liveAssets.length > 0 ? liveAssets : fallbackAssets;
+  // Combine live crypto assets with event-based markets
+  const eventMarkets = allEventAssets.map(convertEventToMarket);
+  const cryptoAssets = liveAssets.length > 0 ? liveAssets : fallbackAssets;
+  const assets = [...cryptoAssets, ...eventMarkets];
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -45,7 +63,11 @@ export default function Markets({
            [t.markets.defi]: ['DeFi'],
            [t.markets.l1]: ['Layer 1'],
            [t.markets.l2]: ['Layer 2'],
-           [t.markets.meta]: ['Metaverse']
+           [t.markets.meta]: ['Metaverse'],
+           '政治': ['Politics'],
+           '体育': ['Sports'],
+           '经济': ['Economics'],
+           '电竞': ['Esports']
        };
        const targetCategories = categoryMap[activeFilter] || [activeFilter];
        data = data.filter(asset => targetCategories.includes(asset.category));
@@ -107,6 +129,26 @@ export default function Markets({
                     label={t.markets.meta} 
                     active={activeFilter === t.markets.meta} 
                     onClick={() => setActiveFilter(t.markets.meta)}
+                />
+                <FilterButton 
+                    label="政治" 
+                    active={activeFilter === '政治'} 
+                    onClick={() => setActiveFilter('政治')}
+                />
+                <FilterButton 
+                    label="体育" 
+                    active={activeFilter === '体育'} 
+                    onClick={() => setActiveFilter('体育')}
+                />
+                <FilterButton 
+                    label="经济" 
+                    active={activeFilter === '经济'} 
+                    onClick={() => setActiveFilter('经济')}
+                />
+                <FilterButton 
+                    label="电竞" 
+                    active={activeFilter === '电竞'} 
+                    onClick={() => setActiveFilter('电竞')}
                 />
             </div>
             <div className="relative w-full md:w-80">

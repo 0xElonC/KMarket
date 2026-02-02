@@ -34,6 +34,8 @@ export const translations = {
       oddsDesc: '赔率根据市场情绪和流动性深度实时调整，确保每笔交易的公平定价。',
       liqTitle: '无清算风险',
       liqDesc: '自信交易。您的头寸完全抵押，消除了突然清算插针的风险。',
+      esportsTitle: '电竞经济',
+      esportsDesc: '预测电竞赛事结果与CS饰品价格走势，捕捉虚拟资产交易池的价值波动。',
       secure: '100% 安全合约'
     },
     markets: {
@@ -351,6 +353,8 @@ export const translations = {
       oddsDesc: 'Odds adjust in real-time based on market sentiment and liquidity depth, ensuring fair pricing for every trade.',
       liqTitle: 'No Liquidation',
       liqDesc: 'Trade with confidence. Your positions are fully collateralized, eliminating the risk of sudden liquidation wicks.',
+      esportsTitle: 'Esports Economy',
+      esportsDesc: 'Predict esports match outcomes and CS:GO skin price trends, capturing value fluctuations in virtual asset pools.',
       secure: '100% Secure Contract'
     },
     markets: {

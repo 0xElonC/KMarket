@@ -2,7 +2,8 @@ export enum Page {
   HOME = 'HOME',
   MARKETS = 'MARKETS',
   TERMINAL = 'TERMINAL',
-  DASHBOARD = 'DASHBOARD'
+  DASHBOARD = 'DASHBOARD',
+  HOW_IT_WORKS = 'HOW_IT_WORKS'
 }
 
 export type Language = 'CN' | 'EN';
