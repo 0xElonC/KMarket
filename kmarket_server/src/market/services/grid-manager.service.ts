@@ -166,12 +166,15 @@ export class GridManagerService implements OnModuleInit {
         const lastCreatedAt = lastColCells[0].createdAt;
         if (now - lastCreatedAt < config.grid.intervalMs) return;
 
+        // 获取上一列的 expiryTime，用于链式计算
+        const lastExpiryTime = lastColCells[0].expiryTime;
+
         // 生成新列
         const newCol = maxCol + 1;
         const colCounter = this.colCounters.get(symbol) || 0;
         this.colCounters.set(symbol, colCounter + 1);
 
-        const newCells = this.generateColumn(symbol, config, newCol, basePrice, now);
+        const newCells = this.generateColumn(symbol, config, newCol, basePrice, now, lastExpiryTime);
 
         // 添加到网格
         grid.push(...newCells);
@@ -190,19 +193,26 @@ export class GridManagerService implements OnModuleInit {
 
     /**
      * 生成单列
+     * @param lastExpiryTime 上一列的到期时间，用于链式计算（可选，初始化时不传）
      */
     private generateColumn(
         symbol: string,
         config: MarketConfig,
         col: number,
         basePrice: number,
-        now: number
+        now: number,
+        lastExpiryTime?: number
     ): InternalGridCell[] {
-        const { rows, priceRange, minBetDistance } = config.grid;
+        const { rows, priceRange, minBetDistance, intervalMs } = config.grid;
         const cells: InternalGridCell[] = [];
 
         const priceStep = (priceRange * 2 / rows) / 100;
-        const expiryTime = now + (config.grid.cols + minBetDistance) * 1000;
+
+        // 链式计算 expiryTime：如果有上一列，则基于上一列 + intervalMs
+        // 否则使用初始化公式（用于 generateFullGrid 调用）
+        const expiryTime = lastExpiryTime
+            ? lastExpiryTime + intervalMs
+            : now + (config.grid.cols + minBetDistance) * 1000;
 
         // 更新基准价格 (缓慢跟随当前价格)
         const priceData = this.gateWsService.getCurrentPrice(symbol);
